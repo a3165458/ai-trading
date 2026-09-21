@@ -266,6 +266,16 @@ class Engine:
         state = snap.state_text(view, allowed)
         decision = await self.model.decide(snap, state)
         action = decision.action
+        probs = decision.probabilities or {}
+        conf = decision.confidence
+        if abs(pos.size) < 1e-12:
+            pb, ps = float(probs.get("buy") or 0), float(probs.get("sell") or 0)
+            split = pb + ps
+            if split > 0:
+                pb, ps = pb / split, ps / split
+                if max(pb, ps) >= self.settings.min_confidence:
+                    action = "buy" if pb >= ps else "sell"
+                    conf = max(pb, ps)
         if action == "buy" and pos.size > 0:
             action = "hold"
         elif action == "sell" and pos.size < 0:
@@ -294,7 +304,7 @@ class Engine:
             intent, reason = decide_intent(
                 snap,
                 action,
-                decision.confidence,
+                conf,
                 decision.probabilities,
                 pos,
                 self.settings,

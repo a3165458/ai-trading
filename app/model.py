@@ -11,7 +11,7 @@ from app.config import Settings
 from app.types import Action, Decision, Snapshot
 
 OPTIONS: tuple[Action, Action, Action] = ("buy", "sell", "hold")
-QUESTION = "Buy, sell, or hold? hold = keep the current position unchanged. buy = open or add a long. sell = open or add a short. Prefer hold unless there is a clear new edge."
+QUESTION = "Should the execution system buy, sell, or hold this perpetual now?"
 
 
 def _normalize_probs(raw: dict[str, Any] | None) -> dict[str, float]:
