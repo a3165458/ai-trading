@@ -10,8 +10,8 @@ import httpx
 from app.config import Settings
 from app.types import Action, Decision, Snapshot
 
-OPTIONS: tuple[Action, Action] = ("buy", "sell")
-QUESTION = "Should the execution system buy or sell this perpetual now?"
+OPTIONS: tuple[Action, Action, Action] = ("buy", "sell", "hold")
+QUESTION = "Buy, sell, or hold? hold = keep the current position unchanged. buy = open or add a long. sell = open or add a short. Prefer hold unless there is a clear new edge."
 
 
 def _normalize_probs(raw: dict[str, Any] | None) -> dict[str, float]:
@@ -23,19 +23,19 @@ def _normalize_probs(raw: dict[str, Any] | None) -> dict[str, float]:
     s = sum(probs.values())
     if s > 0:
         return {k: v / s for k, v in probs.items()}
-    return {"buy": 0.5, "sell": 0.5}
+    return {o: 1.0 / len(OPTIONS) for o in OPTIONS}
 
 
 def _pick(chosen: Any, probs: dict[str, float]) -> Action:
     if chosen in OPTIONS:
         return chosen  # type: ignore[return-value]
-    return "buy" if probs.get("buy", 0) >= probs.get("sell", 0) else "sell"
+    return max(OPTIONS, key=lambda o: probs.get(o, 0.0))
 
 
 def error_decision(source: str, latency_ms: float, error: str, prompt: str = "") -> Decision:
     return Decision(
-        "buy",
-        {"buy": 0.5, "sell": 0.5},
+        "hold",
+        {"buy": 0.0, "sell": 0.0, "hold": 1.0},
         0.0,
         latency_ms,
         source,
@@ -121,7 +121,7 @@ def parse_decision(body: dict[str, Any], latency_ms: float, source: str, prompt:
         elif chosen in OPTIONS:
             probs = {o: (1.0 if o == chosen else 0.0) for o in OPTIONS}
         else:
-            probs = {"buy": 0.5, "sell": 0.5}
+            probs = _normalize_probs(None)
     chosen = _pick(chosen, probs)
     if conf is None:
         conf = probs.get(chosen, 0.0)
@@ -143,8 +143,17 @@ class MockModel:
         signal = ret / 12 + snapshot.imbalance * 1.4 + math.tanh(flow * 50) * 0.8
         buy = 1 / (1 + math.exp(-signal))
         sell = 1 - buy
-        action: Action = "buy" if buy >= sell else "sell"
-        probs = _normalize_probs({"buy": buy, "sell": sell})
+        edge = abs(buy - 0.5)
+        if edge < 0.08:
+            hold = 0.55 + (0.08 - edge)
+            rest = max(0.0, 1 - hold)
+            action: Action = "hold"
+            probs = _normalize_probs({"buy": rest * buy, "sell": rest * sell, "hold": hold})
+        else:
+            action = "buy" if buy >= sell else "sell"
+            hold = max(0.04, 0.22 - edge)
+            rest = 1 - hold
+            probs = _normalize_probs({"buy": rest * buy, "sell": rest * sell, "hold": hold})
         _ = state
         return Decision(
             action, probs, probs[action], (time.perf_counter() - t0) * 1000, "mock",
@@ -156,8 +165,8 @@ class MockModel:
                 "logprob": math.log(max(probs[action], 1e-9)),
                 "p": probs[action],
                 "top": [
-                    {"token": "buy", "logprob": math.log(max(probs["buy"], 1e-9)), "p": probs["buy"]},
-                    {"token": "sell", "logprob": math.log(max(probs["sell"], 1e-9)), "p": probs["sell"]},
+                    {"token": k, "logprob": math.log(max(probs[k], 1e-9)), "p": probs[k]}
+                    for k in OPTIONS
                 ],
             }],
         )
@@ -213,7 +222,7 @@ class OpenAIDecisionModel:
                 },
             },
             "logprobs": True,
-            "top_logprobs": 2,
+            "top_logprobs": 3,
             "temperature": 1,
         }
         headers = {"Content-Type": "application/json"}
@@ -251,6 +260,7 @@ class JevDecisionModel:
                     "criteria": {
                         "buy": "Open or add a long, or buy this perpetual now.",
                         "sell": "Open or add a short, or sell this perpetual now.",
+                        "hold": "Do nothing this round. No edge, mixed signals, or too close to call.",
                     },
                 }
             },

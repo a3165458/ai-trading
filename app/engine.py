@@ -75,6 +75,7 @@ class Engine:
         self.n_cycles = 0
         self.n_buy = 0
         self.n_sell = 0
+        self.n_hold = 0
         self.latencies: deque[float] = deque(maxlen=200)
         self.best_round: dict[str, Any] | None = None
         self.worst_round: dict[str, Any] | None = None
@@ -95,7 +96,7 @@ class Engine:
         return self.account.start_equity * (sum(rets) / len(rets))
 
     def stats(self) -> dict[str, Any]:
-        n = self.n_buy + self.n_sell
+        n = self.n_buy + self.n_sell + self.n_hold
         elapsed = max(0.0, time.time() - (self.loop_started_at or self.created_at))
         avg_lat = (sum(self.latencies) / len(self.latencies)) if self.latencies else 0.0
         return {
@@ -103,9 +104,11 @@ class Engine:
             "n_decisions": n,
             "n_buy": self.n_buy,
             "n_sell": self.n_sell,
+            "n_hold": self.n_hold,
             "n_orders": len(self.orders),
             "buy_rate": (self.n_buy / n) if n else 0.0,
             "sell_rate": (self.n_sell / n) if n else 0.0,
+            "hold_rate": (self.n_hold / n) if n else 0.0,
             "elapsed_s": elapsed,
             "avg_latency_ms": avg_lat,
             "decisions_per_min": (n / elapsed * 60) if elapsed > 1 else 0.0,
@@ -181,7 +184,10 @@ class Engine:
         if not self.settings.live or self.settings.lighter_account_index is None:
             return
         try:
-            data = await self.market.account(self.settings.lighter_account_index)
+            await self.market._ensure()
+            data = self.market.account_state()
+            if not data:
+                return
             self.account.apply_exchange(data)
             self.hub.emit("account", self.account.as_public())
         except Exception as e:
@@ -259,17 +265,27 @@ class Engine:
         }
         state = snap.state_text(view, allowed)
         decision = await self.model.decide(snap, state)
+        action = decision.action
+        if action == "buy" and pos.size > 0:
+            action = "hold"
+        elif action == "sell" and pos.size < 0:
+            action = "hold"
         if not decision.error:
-            if decision.action == "buy":
+            if action == "buy":
                 self.n_buy += 1
-            else:
+            elif action == "sell":
                 self.n_sell += 1
+            else:
+                self.n_hold += 1
         if decision.latency_ms:
             self.latencies.append(float(decision.latency_ms))
 
-        action = decision.action
         if decision.error:
             intent, reason = None, "model_error"
+        elif action == "hold":
+            intent, reason = None, "model_hold" if decision.action == "hold" else (
+                "already_long" if pos.size > 0 else "already_short"
+            )
         elif action == "buy" and not allowed["buy"]:
             intent, reason = None, "buy_not_allowed"
         elif action == "sell" and not allowed["sell"]:
@@ -289,6 +305,7 @@ class Engine:
             "mid": snap.mid,
             "ts_ms": int(time.time() * 1000),
             **decision.as_public(),
+            "action": action,
             "outcome": "trade" if intent is not None else "skip",
             "reason": reason,
         }

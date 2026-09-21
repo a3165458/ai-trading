@@ -14,6 +14,7 @@ from app.engine import Engine, Hub
 from app.executor import PaperAccount, build_executor
 from app.market import LighterMarket
 from app.model import build_model
+from app.public import public_payload
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -21,7 +22,12 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     hub = Hub()
-    market = LighterMarket(settings.lighter_base_url)
+    market = LighterMarket(
+        settings.lighter_base_url,
+        account_index=settings.lighter_account_index if settings.live else None,
+        api_private_key=settings.lighter_api_private_key if settings.live else None,
+        api_key_index=settings.lighter_api_key_index,
+    )
     model = build_model(settings)
     account = PaperAccount(settings.paper_equity_usd, settings.markets)
     executor = build_executor(settings, account)
@@ -33,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         await engine.close()
 
-    app = FastAPI(title="JEV Lighter Trader", lifespan=lifespan)
+    app = FastAPI(title="JEV Lighter Trader", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.engine = engine
     app.state.settings = settings
 
@@ -46,42 +52,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/state")
     async def state():
-        return engine.snapshot_state()
+        return public_payload(engine.snapshot_state())
 
     @app.get("/api/health")
     async def health():
         return {
             "ok": True,
             "mode": settings.trading_mode,
-            "model": model.name,
             "backend": settings.resolved_backend,
-            "lighter": settings.lighter_base_url,
         }
 
     @app.post("/api/start")
-    async def start():
-        engine.start()
-        return {"running": True}
-
     @app.post("/api/stop")
-    async def stop():
-        engine.stop()
-        return {"running": False}
-
     @app.post("/api/tick")
-    async def tick():
-        try:
-            result = await engine.cycle()
-            return result
-        except Exception as e:
-            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    async def disabled_control():
+        return JSONResponse({"ok": False, "error": "disabled"}, status_code=404)
 
     @app.get("/api/events")
     async def events(request: Request):
         q = hub.subscribe()
         async def gen():
             try:
-                snap = json.dumps(engine.snapshot_state(), default=str)
+                snap = json.dumps(public_payload(engine.snapshot_state()), default=str)
                 yield f"event: snapshot\ndata: {snap}\n\n"
                 while True:
                     if await request.is_disconnected():
@@ -89,7 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     try:
                         rec = await asyncio.wait_for(q.get(), timeout=15)
                         ev = rec.get("event", "message")
-                        payload = json.dumps(rec, default=str)
+                        payload = json.dumps(public_payload(rec), default=str)
                         yield f"event: {ev}\ndata: {payload}\n\n"
                     except asyncio.TimeoutError:
                         yield "event: ping\ndata: {}\n\n"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-Action = Literal["buy", "sell"]
+Action = Literal["buy", "sell", "hold"]
 
 
 def to_dict(obj: Any) -> Any:

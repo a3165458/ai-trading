@@ -90,6 +90,7 @@
     .cell { height: 26px; background: var(--track); }
     .cell.buy { background: var(--buy); }
     .cell.sell { background: var(--sell); }
+    .cell.hold { background: var(--faint); }
     .cell.new { animation: cellIn 0.5s ease-out; }
     @keyframes cellIn { from { transform: scaleY(0.2); opacity: 0.4; } to { transform: none; opacity: 1; } }
     .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 6px; padding-left: 50px; }
@@ -122,10 +123,12 @@
     .act { font-size: 11px; letter-spacing: 0.08em; font-weight: 600; }
     .act.buy { color: var(--ink); }
     .act.sell { color: var(--sell); }
+    .act.hold { color: var(--muted); }
     .pbar { display: flex; height: 8px; background: var(--track); overflow: hidden; }
     .pbar i { display: block; height: 100%; transition: width 0.5s ease; }
     .pbar .b { background: var(--buy); }
     .pbar .s { background: var(--sell); }
+    .pbar .h { background: var(--faint); }
     .flash { animation: flashBg 0.9s ease-out; }
 
     /* feed */
@@ -170,14 +173,6 @@
     .chip.flat { color: var(--faint); }
     .right { text-align: right; }
 
-    /* extremes */
-    .extremes { background: var(--ink); color: #f4efe6; padding: 14px 16px; }
-    .extremes .k { font-size: 11px; color: #b7b1a4; margin-bottom: 8px; }
-    .ex-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: baseline; padding: 4px 0; }
-    .ex-row .lab { font-size: 12px; color: #c9c3b6; }
-    .ex-row .val { font-size: 22px; font-family: Fraunces, Georgia, serif; }
-    .ex-row .val.up { color: #8ee0a6; } .ex-row .val.down { color: #ff8b7d; }
-    .ex-row .note { font-size: 12px; color: #c9c3b6; text-align: right; }
 
     /* status bar */
     .statusbar {
@@ -186,18 +181,6 @@
       display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
       font-size: 11px; color: var(--muted);
     }
-    .nat-note { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
-    .nat-q { font-family: Fraunces, Georgia, serif; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
-    .nat-pre {
-      margin: 0; padding: 10px 12px; background: #f7f2e8; border: 1px solid var(--line);
-      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; line-height: 1.45;
-      white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; color: #3a372f;
-    }
-    .nat-label { font-size: 11px; color: var(--faint); margin: 10px 0 6px; letter-spacing: 0.04em; }
-    .tok { display: grid; grid-template-columns: 56px 1fr 64px 72px; gap: 8px; align-items: center; font-size: 12px; padding: 4px 0; }
-    .tok .bar { height: 8px; background: var(--track); }
-    .tok .bar i { display: block; height: 100%; background: var(--buy); }
-    .tok.sell .bar i { background: var(--sell); }
     .conn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 1px; }
     .conn.ok { background: var(--gain); }
     .conn.bad { background: var(--sell); animation: pulse 1s ease-in-out infinite; }
@@ -225,12 +208,12 @@
 
   <section class="kpis">
     <div class="kpi dark">
-      <div class="k">账户净值 · 本金 <span id="kStart">—</span></div>
+      <div class="k">账户净值 · 抵押 <span id="kStart">—</span></div>
       <div class="v" id="kEquity">—</div>
       <div class="s"><span id="kEquitySub">—</span></div>
     </div>
     <div class="kpi dark">
-      <div class="k">累计盈亏</div>
+      <div class="k">累计盈亏 · 浮动+已实现</div>
       <div class="v" id="kPnl">—</div>
       <div class="s"><span id="kPnlSub">—</span></div>
     </div>
@@ -264,6 +247,7 @@
           <div class="legend">
             <span><i style="background:var(--buy)"></i>BUY</span>
             <span><i style="background:var(--sell)"></i>SELL</span>
+            <span><i style="background:var(--faint)"></i>HOLD</span>
             <span><i style="background:var(--track)"></i>未到</span>
           </div>
         </div>
@@ -298,22 +282,6 @@
         <div id="nowRows"></div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>模型原声 · <b id="natMeta">—</b></h2>
-          <div class="legend" id="natFollow"></div>
-        </div>
-        <p class="nat-note">this-that 没有思维链。原生结果是枚举选项上的校准概率，不是一段推理文字。</p>
-        <div class="nat-q" id="natQuestion">等待模型…</div>
-        <div class="nat-label">TOKEN LOGPROBS</div>
-        <div id="natTokens"></div>
-        <div class="nat-label">MESSAGE.CONTENT</div>
-        <pre class="nat-pre" id="natContent">—</pre>
-        <div class="nat-label">THIS_THAT</div>
-        <pre class="nat-pre" id="natExtra">—</pre>
-        <div class="nat-label">PROMPT / 市场状态</div>
-        <pre class="nat-pre" id="natPrompt">—</pre>
-      </section>
 
       <section class="card">
         <div class="card-head">
@@ -343,10 +311,6 @@
         <div id="book"></div>
       </section>
 
-      <section class="extremes">
-        <div class="k">至今最赚 / 最亏 · 单轮净值变动</div>
-        <div id="extremes"></div>
-      </section>
     </div>
   </main>
 
@@ -369,13 +333,13 @@
       decisions: [], lastBySymbol: {},
     };
     const feed = { page: 1, unseen: 0 };
-    let inspectKey = null;
     let lastWallTs = null;
     let connectedOnce = false;
 
     const REASON_ZH = {
       ok: "已下单", cooldown: "冷却中", max_position: "仓位上限",
       buy_not_allowed: "买入受限", sell_not_allowed: "卖出受限",
+      model_hold: "观望", already_long: "已有多仓", already_short: "已有空仓",
       model_error: "模型错误", unknown_action: "未知动作", size_zero: "数量为零",
     };
     function reasonText(d) {
@@ -446,18 +410,18 @@
       const equity = a.equity ?? a.start_equity;
       const pnl = a.pnl_usd ?? 0;
       const pct = a.pnl_pct ?? 0;
-      setText("kStart", money(a.start_equity, 0));
+      setText("kStart", money(a.cash ?? a.start_equity, 0));
       setText("kEquity", money(equity), { flash: true });
-      setText("kEquitySub", `现金 ${money(a.cash)} · 浮动 ${signedMoney((a.equity || 0) - (a.cash || 0))}`);
+      setText("kEquitySub", `可用 ${money(a.available ?? a.cash)} · 浮动 ${signedMoney(a.unrealized_usd ?? ((a.equity || 0) - (a.cash || 0)))}`);
       setText("kPnl", signedMoney(pnl), { flash: true, cls: clsPnl(pnl) });
-      setText("kPnlSub", `${pct >= 0 ? "+" : ""}${fmt(pct, 4)}% · 对照等权买入持有见图`);
+      setText("kPnlSub", `浮动 ${signedMoney(a.unrealized_usd)} · 已实现 ${signedMoney(a.realized_usd)} · ${pct >= 0 ? "+" : ""}${fmt(pct, 2)}%`);
       setText("kCycles", st.n_cycles || 0, { flash: true });
       setText("kDecisions", st.n_decisions || 0, { flash: true });
       setText("kDecSub", `${fmt(st.decisions_per_min || 0, 1)} 次/分 · 下单 ${st.n_orders || 0}`);
       setText("kLatency", `${fmt(st.avg_latency_ms || 0, 0)} ms`);
-      const n = (st.n_buy || 0) + (st.n_sell || 0);
+      const n = (st.n_buy || 0) + (st.n_sell || 0) + (st.n_hold || 0);
       setText("kBuyRate", n ? `${fmt((st.n_buy || 0) / n * 100, 0)}%` : "—", { flash: true });
-      setText("kBuySub", `BUY ${st.n_buy || 0} · SELL ${st.n_sell || 0}`);
+      setText("kBuySub", `BUY ${st.n_buy || 0} · SELL ${st.n_sell || 0} · HOLD ${st.n_hold || 0}`);
       renderElapsed();
     }
     function renderElapsed() {
@@ -538,10 +502,11 @@
 
     /* ---------- now: prices + latest decision per market ---------- */
     function pbarHtml(p) {
-      const b = p.buy || 0, s = p.sell || 0, tot = (b + s) || 1;
-      return `<div class="pbar" title="buy ${fmt(b / tot * 100, 0)} / sell ${fmt(s / tot * 100, 0)}">
+      const b = p.buy || 0, s = p.sell || 0, h = p.hold || 0, tot = (b + s + h) || 1;
+      return `<div class="pbar" title="buy ${fmt(b / tot * 100, 0)} / sell ${fmt(s / tot * 100, 0)} / hold ${fmt(h / tot * 100, 0)}">
         <i class="b" style="width:${(b / tot * 100).toFixed(1)}%"></i>
         <i class="s" style="width:${(s / tot * 100).toFixed(1)}%"></i>
+        <i class="h" style="width:${(h / tot * 100).toFixed(1)}%"></i>
       </div>`;
     }
     function ensurePriceCards() {
@@ -602,60 +567,6 @@
       if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
     }
 
-    function decisionKey(d) { return `${d.ts_ms}|${d.symbol || ""}`; }
-    function inspectedDecision() {
-      if (inspectKey) {
-        const hit = state.decisions.find(d => decisionKey(d) === inspectKey);
-        if (hit) return hit;
-      }
-      return state.decisions.length ? state.decisions[state.decisions.length - 1] : null;
-    }
-    function followLatest() {
-      const last = state.decisions[state.decisions.length - 1];
-      return !inspectKey || (last && inspectKey === decisionKey(last));
-    }
-    function renderNative() {
-      const d = inspectedDecision();
-      const following = followLatest();
-      $("natFollow").innerHTML = following
-        ? `<span>跟随最新</span>`
-        : `<button class="pill" id="natLive" type="button">回到最新</button>`;
-      const btn = $("natLive");
-      if (btn) btn.onclick = () => { inspectKey = null; renderNative(); renderFeed(false); };
-      if (!d) {
-        setText("natMeta", "—");
-        setText("natQuestion", "等待模型…");
-        $("natTokens").innerHTML = "";
-        $("natContent").textContent = "—";
-        $("natExtra").textContent = "—";
-        $("natPrompt").textContent = "—";
-        return;
-      }
-      setText("natMeta", `${d.symbol || "?"} · ${hms(d.ts_ms)} · ${d.source || ""}`);
-      setText("natQuestion", d.question || "Should the execution system buy or sell this perpetual now?");
-      const tops = (d.logprobs && d.logprobs[0] && d.logprobs[0].top) || [];
-      if (tops.length) {
-        $("natTokens").innerHTML = tops.map(t => {
-          const tok = String(t.token || "").replace(/"/g, "");
-          const p = t.p != null ? t.p : Math.exp(t.logprob || -99);
-          const kind = tok === "sell" ? "sell" : "buy";
-          return `<div class="tok ${kind}">
-            <div class="act ${kind}">${esc(tok.toUpperCase())}</div>
-            <div class="bar"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
-            <div class="num right">${fmt(p * 100, 1)}%</div>
-            <div class="num" style="color:var(--faint)">lp ${fmt(t.logprob, 3)}</div>
-          </div>`;
-        }).join("");
-      } else {
-        const p = d.probabilities || {};
-        $("natTokens").innerHTML = ["buy", "sell"].map(k =>
-          `<div class="tok ${k}"><div class="act ${k}">${k.toUpperCase()}</div><div class="bar"><i style="width:${((p[k] || 0) * 100).toFixed(1)}%"></i></div><div class="num right">${fmt((p[k] || 0) * 100, 1)}%</div><div></div></div>`
-        ).join("");
-      }
-      $("natContent").textContent = d.content || d.raw || "—";
-      $("natExtra").textContent = d.this_that ? JSON.stringify(d.this_that, null, 2) : "（响应未带 this_that 扩展）";
-      $("natPrompt").textContent = d.prompt || "—";
-    }
     function renderFeed(newArrived) {
       const all = state.decisions.slice().reverse();
       const total = all.length;
@@ -679,8 +590,7 @@
         const whyCls = d.error ? "why err" : traded ? "why traded" : "why";
         const why = d.error ? `错误 ${String(d.error).slice(0, 40)}` : reasonText(d);
         const anim = newArrived && feed.page === 1 && i === 0 ? " anim-in" : "";
-        const on = inspectKey === decisionKey(d) || (!inspectKey && i === 0 && feed.page === 1) ? " on" : "";
-        return `<div class="frow${anim}${on}" data-key="${esc(decisionKey(d))}">
+        return `<div class="frow${anim}">
           <div class="t num">${hms(d.ts_ms)}</div>
           <div>${esc(d.symbol)}</div>
           <div class="act ${act}">${act.toUpperCase()}</div>
@@ -693,13 +603,6 @@
       for (let i = rows.length; i < PAGE_SIZE; i++) html.push(`<div class="frow blank"></div>`);
       if (!total) html[0] = `<div class="frow blank"><div class="empty" style="grid-column:1/-1">模型的每一次判断都会出现在这里：动作、买卖概率、置信度、延迟和执行结果。</div></div>`;
       $("feed").innerHTML = html.join("");
-      $("feed").onclick = (e) => {
-        const row = e.target.closest(".frow[data-key]");
-        if (!row) return;
-        inspectKey = row.getAttribute("data-key");
-        renderNative();
-        renderFeed(false);
-      };
 
       setText("pageInfo", total ? `第 ${startIdx + 1}–${Math.min(startIdx + PAGE_SIZE, total)} 条 · 共 ${total} 条` : "暂无记录");
       setText("pageNum", `${feed.page} / ${pages}`);
@@ -745,16 +648,9 @@
         </div>`;
     }
 
-    /* ---------- extremes ---------- */
-    function renderExtremes() {
-      const row = (lab, rec, good) => rec
-        ? `<div class="ex-row"><div class="lab">${lab}</div><div class="val num ${good ? "up" : "down"}">${signedMoney(rec.pnl)}</div><div class="note">${hms(rec.ts_ms)}</div></div>`
-        : `<div class="ex-row"><div class="lab">${lab}</div><div class="val" style="color:#7a7468">—</div><div></div></div>`;
-      $("extremes").innerHTML = row("最赚", state.best_round, true) + row("最亏", state.worst_round, false);
-    }
 
     function renderAll() {
-      renderConfig(); renderStatus(); renderKpis(); renderWall(); renderChart(); renderNow(); renderFeed(false); renderNative(); renderBook(); renderExtremes();
+      renderConfig(); renderStatus(); renderKpis(); renderWall(); renderChart(); renderNow(); renderFeed(false); renderBook();
     }
 
     /* ---------- state ingestion ---------- */
@@ -795,10 +691,11 @@
             const a = (data.action || "").toLowerCase();
             if (a === "buy") st.n_buy = (st.n_buy || 0) + 1;
             else if (a === "sell") st.n_sell = (st.n_sell || 0) + 1;
-            st.n_decisions = (st.n_buy || 0) + (st.n_sell || 0);
+            else if (a === "hold") st.n_hold = (st.n_hold || 0) + 1;
+            st.n_decisions = (st.n_buy || 0) + (st.n_sell || 0) + (st.n_hold || 0);
           }
           if (data.outcome === "trade") st.n_orders = (st.n_orders || 0) + 1;
-          renderNow(); renderFeed(true); renderNative(); renderKpis(); flashNowRow(data.symbol);
+          renderNow(); renderFeed(true); renderKpis(); flashNowRow(data.symbol);
           break;
         }
         case "order": case "fill":

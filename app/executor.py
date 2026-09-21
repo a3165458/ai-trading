@@ -92,6 +92,7 @@ def apply_fill(pos: Position, action: Action, qty: float, price: float) -> float
 class PaperAccount:
     def __init__(self, equity: float, symbols: list[str]):
         self.cash = equity
+        self.available = equity
         self.start_equity = equity
         self.positions = {s: Position(s) for s in symbols}
         self.marks: dict[str, float] = {}
@@ -114,22 +115,31 @@ class PaperAccount:
             "realized_usd": round(p.realized, 4),
             "notional_usd": round(abs(p.size) * mid, 4) if mid else 0.0,
         }
-
-    def equity(self) -> float:
+    def _unrealized(self) -> float:
         u = 0.0
         for s, p in self.positions.items():
             mid = self.marks.get(s)
             if mid:
                 u += p.unrealized(mid)
-        return self.cash + u
+        return u
+
+    def equity(self) -> float:
+        return self.cash + self._unrealized()
 
     def as_public(self) -> dict:
+        u = self._unrealized()
+        r = sum(p.realized for p in self.positions.values())
+        pnl = u + r
+        den = self.cash or self.start_equity
         return {
             "equity": round(self.equity(), 4),
             "cash": round(self.cash, 4),
+            "available": round(self.available, 4),
             "start_equity": self.start_equity,
-            "pnl_usd": round(self.equity() - self.start_equity, 4),
-            "pnl_pct": round((self.equity() / self.start_equity - 1) * 100, 4) if self.start_equity else 0.0,
+            "unrealized_usd": round(u, 4),
+            "realized_usd": round(r, 4),
+            "pnl_usd": round(pnl, 4),
+            "pnl_pct": round((pnl / den) * 100, 4) if den else 0.0,
             "positions": [self.position_view(s) for s in self.positions],
         }
 
@@ -137,14 +147,25 @@ class PaperAccount:
         acct = _pick_account(body)
         if not acct:
             return
-        cash = _num(acct.get("available_balance") or acct.get("collateral"))
-        if cash is not None:
-            self.cash = cash
+        # collateral = total USDC. available_balance drops when margin is locked — that is not PnL.
+        total = _num(acct.get("collateral"))
+        free = _num(acct.get("available_balance"))
+        if total is not None:
+            self.cash = total
+        elif free is not None:
+            self.cash = free
+        if free is not None:
+            self.available = free
+        elif total is not None:
+            self.available = total
         seen: set[str] = set()
-        for row in acct.get("positions") or []:
+        raw_pos = acct.get("positions")
+        if isinstance(raw_pos, dict):
+            raw_pos = list(raw_pos.values())
+        for row in raw_pos or []:
             if not isinstance(row, dict):
                 continue
-            sym = str(row.get("symbol") or "").upper()
+            sym = str(row.get("symbol") or "").upper().split("-")[0].split("/")[0]
             if sym not in self.positions:
                 continue
             seen.add(sym)
@@ -326,6 +347,8 @@ def decide_intent(
     settings: Settings,
     last_trade_at: float,
 ) -> tuple[OrderIntent | None, str]:
+    if action == "hold":
+        return None, "model_hold"
     if action not in ("buy", "sell"):
         return None, "unknown_action"
     if confidence < settings.min_confidence:

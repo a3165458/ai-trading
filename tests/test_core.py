@@ -136,7 +136,7 @@ class ParseTests(unittest.TestCase):
         self.assertAlmostEqual(d.logprobs[0]["top"][1]["p"], 0.2, places=5)
         pub = d.as_public()
         self.assertIn("this_that", pub)
-        self.assertEqual(pub["question"], "Should the execution system buy or sell this perpetual now?")
+        self.assertIn("hold", pub["question"])
 
     def test_json_content(self):
         d = parse_decision(
@@ -168,7 +168,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(d.action, "buy")
         self.assertAlmostEqual(d.probabilities["buy"], 0.7, places=5)
         self.assertAlmostEqual(d.probabilities["sell"], 0.3, places=5)
-        self.assertNotIn("hold", d.probabilities)
+        self.assertAlmostEqual(d.probabilities["hold"], 0.0, places=5)
 
     def test_jev_choice(self):
         d = parse_jev_decision(
@@ -188,10 +188,10 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(d.action, "buy")
         self.assertEqual(d.source, "jev")
         self.assertAlmostEqual(d.probabilities["sell"], 0.28)
-        self.assertNotIn("hold", d.probabilities)
+        self.assertAlmostEqual(d.probabilities.get("hold", 0), 0.0)
 
 
-    def test_legacy_hold_remaps_to_buy_sell(self):
+    def test_hold_kept(self):
         d = parse_decision(
             {
                 "this_that": {
@@ -203,16 +203,20 @@ class ParseTests(unittest.TestCase):
             1,
             "openai",
         )
-        self.assertEqual(d.action, "buy")
-        self.assertAlmostEqual(d.probabilities["buy"], 0.8)
-        self.assertNotIn("hold", d.probabilities)
+        self.assertEqual(d.action, "hold")
+        self.assertAlmostEqual(d.probabilities["hold"], 0.5)
 
 
 class PolicyTests(unittest.TestCase):
     def test_unknown_action_skips(self):
-        intent, reason = decide_intent(snap(), "hold", 0.9, {"buy": 0.5, "sell": 0.5}, Position("BTC"), settings(), 0)
+        intent, reason = decide_intent(snap(), "noop", 0.9, {"buy": 0.5, "sell": 0.5}, Position("BTC"), settings(), 0)
         self.assertIsNone(intent)
         self.assertEqual(reason, "unknown_action")
+
+    def test_hold_skips(self):
+        intent, reason = decide_intent(snap(), "hold", 0.9, {"hold": 0.9, "buy": 0.05, "sell": 0.05}, Position("BTC"), settings(), 0)
+        self.assertIsNone(intent)
+        self.assertEqual(reason, "model_hold")
 
     def test_low_confidence(self):
         intent, reason = decide_intent(snap(), "buy", 0.4, {"buy": 0.4}, Position("BTC"), settings(), 0)
@@ -265,6 +269,41 @@ class ExchangeAccountTests(unittest.TestCase):
         self.assertAlmostEqual(a.cash, 9500)
         self.assertAlmostEqual(a.equity(), 9500 + (-0.01) * (81000 - 80000))
         self.assertEqual(a.positions["ETH"].size, 0)
+
+    def test_locked_margin_is_not_pnl(self):
+        a = PaperAccount(10_000, ["BTC", "ETH"])
+        a.apply_exchange({
+            "accounts": [{
+                "collateral": "257.10",
+                "available_balance": "222.38",
+                "positions": [{
+                    "symbol": "BTC",
+                    "sign": -1,
+                    "position": "0.0045",
+                    "avg_entry_price": "81550.7",
+                    "unrealized_pnl": "-0.03",
+                }],
+            }]
+        })
+        a.mark("BTC", 81556.95)
+        self.assertAlmostEqual(a.cash, 257.10)
+        self.assertAlmostEqual(a.available, 222.38)
+        u = a.positions["BTC"].unrealized(81556.95)
+        self.assertAlmostEqual(a.equity(), 257.10 + u, places=4)
+        pub = a.as_public()
+        self.assertAlmostEqual(pub["unrealized_usd"], u, places=4)
+        self.assertAlmostEqual(pub["pnl_usd"], u, places=4)
+
+
+class BookMergeTests(unittest.TestCase):
+    def test_update_and_delete_level(self):
+        from app.market import merge_book_side
+        bids = merge_book_side(
+            [{"price": "100", "size": "1"}, {"price": "99", "size": "2"}],
+            [{"price": "100", "size": "0"}, {"price": "101", "size": "3"}],
+            reverse=True,
+        )
+        self.assertEqual([b["price"] for b in bids], ["101", "99"])
 
 
 if __name__ == "__main__":
