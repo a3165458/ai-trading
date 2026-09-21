@@ -338,6 +338,37 @@ def build_executor(settings: Settings, account: PaperAccount, refresh=None):
     return PaperExecutor(account)
 
 
+def close_intent(snapshot: Snapshot, pos: Position, settings: Settings, reason: str) -> OrderIntent | None:
+    """Reduce-only market order that flattens `pos`. Used by stop / take-profit / time exits."""
+    if abs(pos.size) < 1e-12 or snapshot.mid <= 0:
+        return None
+    action: Action = "sell" if pos.size > 0 else "buy"
+    size = quantize(abs(pos.size), snapshot.meta.size_decimals, ROUND_DOWN)
+    if size <= 0:
+        size = abs(pos.size)
+    mid = snapshot.mid
+    if action == "buy":
+        worst = mid * (1 + settings.slippage)
+        px = snapshot.best_ask or mid
+    else:
+        worst = mid * (1 - settings.slippage)
+        px = snapshot.best_bid or mid
+    return OrderIntent(
+        symbol=snapshot.symbol,
+        market_id=snapshot.market_id,
+        action=action,
+        size=size,
+        price=px,
+        worst_price=worst,
+        reduce_only=True,
+        reason=reason,
+        confidence=1.0,
+        probabilities={},
+        size_decimals=snapshot.meta.size_decimals,
+        price_decimals=snapshot.meta.price_decimals,
+    )
+
+
 def decide_intent(
     snapshot: Snapshot,
     action: str,

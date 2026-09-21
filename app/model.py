@@ -8,10 +8,13 @@ from typing import Any
 import httpx
 
 from app.config import Settings
+from app.policy import CRITERIA, OPTIONS, QUESTION, rules_text
 from app.types import Action, Decision, Snapshot
 
-OPTIONS: tuple[Action, Action, Action] = ("buy", "sell", "hold")
-QUESTION = "Should the execution system buy, sell, or hold this perpetual now?"
+SYSTEM_PROMPT = (
+    "Typed trading decision for a perpetual futures execution system. "
+    "Read the state, then choose exactly one declared option.\n" + rules_text()
+)
 
 
 def _normalize_probs(raw: dict[str, Any] | None) -> dict[str, float]:
@@ -205,7 +208,7 @@ class OpenAIDecisionModel:
         payload = {
             "model": self.settings.openai_model,
             "messages": [
-                {"role": "system", "content": "Typed trading decision. Choose exactly one declared option."},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": state},
                 {"role": "user", "content": QUESTION},
             ],
@@ -257,11 +260,7 @@ class JevDecisionModel:
                 "action": {
                     "type": "choice",
                     "instructions": QUESTION,
-                    "criteria": {
-                        "buy": "Open or add a long, or buy this perpetual now.",
-                        "sell": "Open or add a short, or sell this perpetual now.",
-                        "hold": "Do nothing this round. No edge, mixed signals, or too close to call.",
-                    },
+                    "criteria": dict(CRITERIA),
                 }
             },
         }

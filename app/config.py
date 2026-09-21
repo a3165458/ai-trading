@@ -67,6 +67,16 @@ class Settings:
     jev_api_url: str = "https://api.typesafe.ai/v1/systemone"
     jev_api_key: str = ""
     jev_model: str = "jev-1.13.0"
+    # policy: what buy / sell / hold mean around the model
+    edge_min: float = 0.10
+    hold_max: float = 0.60
+    allow_add: bool = False
+    stop_loss_bps: float = 80.0
+    take_profit_bps: float = 160.0
+    max_hold_seconds: float = 1800.0
+    fee_bps: float = 2.0
+    debias: bool = True
+    debias_strength: float = 0.5
 
     @property
     def live(self) -> bool:
@@ -133,6 +143,15 @@ def load_settings() -> Settings:
         jev_api_url=_s("JEV_API_URL", "https://api.typesafe.ai/v1/systemone").rstrip("/"),
         jev_api_key=jev_key,
         jev_model=_s("JEV_MODEL", "jev-1.13.0"),
+        edge_min=_f("EDGE_MIN", 0.10),
+        hold_max=_f("HOLD_MAX", 0.60),
+        allow_add=_b("ALLOW_ADD", False),
+        stop_loss_bps=_f("STOP_LOSS_BPS", 80.0),
+        take_profit_bps=_f("TAKE_PROFIT_BPS", 160.0),
+        max_hold_seconds=_f("MAX_HOLD_SECONDS", 1800.0),
+        fee_bps=_f("FEE_BPS", 2.0),
+        debias=_b("DEBIAS", True),
+        debias_strength=_f("DEBIAS_STRENGTH", 0.5),
     )
     resolved = settings.resolved_backend
     if resolved == "thisthat" and not settings.openai_base_url:

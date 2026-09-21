@@ -96,6 +96,20 @@ COOLDOWN_SECONDS=0
 
 市价单：`ORDER_TYPE_MARKET` + IOC。ETH `market_id=0`，BTC `market_id=1`（启动时再向 `/api/v1/orderBooks` 确认）。`price` 是可接受最差价 = mid × (1±`SLIPPAGE`)。
 
+## buy / sell / hold 是怎么真正落地的
+
+this-that 只会在 `buy / sell / hold` 三个词上给概率，本身不知道「什么情况下 buy 是对的」。`app/policy.py` 把这三个词变成有定义的动作：
+
+1. **state 里写清规则和成本**：除了价格、收益、盘口、资金费率，还给模型持仓方向/浮盈 bps/持仓秒数、可用资金、距上次下单秒数、单边手续费和 `round_trip_cost_bps`，以及每个选项的判定标准（同一份 `CRITERIA` 同时进 this-that 的 system prompt 和 Jev 的 `criteria`）。
+2. **去偏**（`DEBIAS`）：按每个标的模型自身的长期输出分布做校准。模型固定偏向 hold 或 sell 时，只有「比平时更想 buy」才会被当成信号。
+3. **仓位感知**：
+   - 空仓：`p(hold) ≥ HOLD_MAX` → 观望；`|p(buy)-p(sell)| < EDGE_MIN` → 观望；否则按方向开仓。
+   - 持多：模型 sell 且占优 → 全平（`exit_long`）；模型 buy → 继续持有（`ALLOW_ADD=true` 才加仓）；hold → 持有。
+   - 持空：镜像。
+4. **退出由代码兜底**：`STOP_LOSS_BPS` / `TAKE_PROFIT_BPS` / `MAX_HOLD_SECONDS` 每轮先于模型检查，触发即 reduce-only 市价平仓，决策流里显示为 止损 / 止盈 / 超时平仓。
+
+界面决策流的「原因」列会写出 开仓 / 持有多仓 / 平多 / 模型偏观望 / 多空差不足 等，可以直接看到每一轮为什么没动。
+
 ## 风控（代码，不是模型）
 
 - `MIN_CONFIDENCE` 以下 → 跳过本轮，不下单

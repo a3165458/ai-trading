@@ -341,6 +341,10 @@
       buy_not_allowed: "买入受限", sell_not_allowed: "卖出受限",
       model_hold: "观望", already_long: "已有多仓", already_short: "已有空仓",
       model_error: "模型错误", unknown_action: "未知动作", size_zero: "数量为零",
+      hold_dominant: "模型偏观望", low_edge: "多空差不足",
+      keep_long: "持有多仓", keep_short: "持有空仓",
+      open: "开仓", exit_long: "平多", exit_short: "平空", add_long: "加多", add_short: "加空",
+      stop_loss: "止损", take_profit: "止盈", time_exit: "超时平仓",
     };
     function reasonText(d) {
       if (d.error) return "错误";
@@ -558,7 +562,7 @@
           <div class="act ${act}">${act.toUpperCase()}</div>
           ${pbarHtml(p)}
           <div class="num right">${fmt((r.confidence || 0) * 100, 0)}%</div>
-          <div class="why ${traded ? "up" : ""}">${traded ? "已下单" : reasonText(r)} · ${fmt(r.latency_ms || 0, 0)}ms · ${hms(r.ts_ms)}</div>
+          <div class="why ${traded ? "up" : ""}">${traded ? "已下单 · " : ""}${reasonText(r)} · ${fmt(r.latency_ms || 0, 0)}ms · ${hms(r.ts_ms)}</div>
         </div>`;
       }).join("");
     }

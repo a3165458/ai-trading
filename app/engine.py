@@ -6,9 +6,10 @@ from collections import deque
 from typing import Any
 
 from app.config import Settings
-from app.executor import PaperAccount, decide_intent
+from app.executor import PaperAccount, close_intent, decide_intent
 from app.market import LighterMarket
 from app.model import DecisionModel
+from app.policy import Calibrator, StateContext, build_state, resolve, risk_exit
 from app.types import OrderResult
 
 
@@ -80,6 +81,9 @@ class Engine:
         self.best_round: dict[str, Any] | None = None
         self.worst_round: dict[str, Any] | None = None
         self._lock = asyncio.Lock()
+        # symbol -> (side, opened_at). Reset on flat / flip so held_seconds is per position.
+        self.opened: dict[str, tuple[str, float]] = {}
+        self.calibrator = Calibrator(strength=settings.debias_strength if settings.debias else 0.0)
         if hasattr(executor, "_refresh"):
             executor._refresh = self.sync_live_account
 
@@ -126,6 +130,16 @@ class Engine:
             "trade_notional_usd": self.settings.trade_notional_usd,
             "min_confidence": self.settings.min_confidence,
             "max_position_usd": self.settings.position_cap,
+            "policy": {
+                "edge_min": self.settings.edge_min,
+                "hold_max": self.settings.hold_max,
+                "allow_add": self.settings.allow_add,
+                "stop_loss_bps": self.settings.stop_loss_bps,
+                "take_profit_bps": self.settings.take_profit_bps,
+                "max_hold_seconds": self.settings.max_hold_seconds,
+                "debias": self.settings.debias,
+                "baseline": {s: self.calibrator.baseline(s) for s in self.settings.markets},
+            },
             "account": self.account.as_public(),
             "tickers": self.tickers,
             "last_decision": self.last_decision,
@@ -256,6 +270,34 @@ class Engine:
             self.bh_mids[symbol] = snap.mid
 
         pos = self.account.positions[symbol]
+        now = time.time()
+        held = self._held_seconds(symbol, pos, now)
+
+        # 1. code-level risk first: stops do not wait for the model
+        exit_reason = risk_exit(pos, snap.mid, held, self.settings)
+        if exit_reason:
+            intent = close_intent(snap, pos, self.settings, exit_reason)
+            if intent is not None:
+                dpub = {
+                    "symbol": symbol,
+                    "mid": snap.mid,
+                    "ts_ms": int(now * 1000),
+                    "action": intent.action,
+                    "probabilities": {},
+                    "confidence": 1.0,
+                    "latency_ms": 0.0,
+                    "source": "risk",
+                    "error": None,
+                    "outcome": "trade",
+                    "reason": exit_reason,
+                    "held_seconds": held,
+                }
+                self.last_decision = dpub
+                self.decisions.append(dpub)
+                self.hub.emit("decision", dpub)
+                return await self._submit(symbol, intent)
+
+        # 2. build the state the model sees
         view = self.account.position_view(symbol)
         notional = abs(pos.size) * snap.mid
         cap = self.settings.position_cap
@@ -263,23 +305,35 @@ class Engine:
             "buy": cap is None or notional < cap or pos.size < 0,
             "sell": cap is None or notional < cap or pos.size > 0,
         }
-        state = snap.state_text(view, allowed)
+        last_at = self.last_trade_at.get(symbol) or 0.0
+        ctx = StateContext(
+            equity_usd=self.account.equity(),
+            available_usd=self.account.available,
+            trade_notional_usd=self.settings.trade_notional_usd,
+            seconds_since_last_order=(now - last_at) if last_at else None,
+            held_seconds=held,
+            allowed_buy=allowed["buy"],
+            allowed_sell=allowed["sell"],
+            fee_bps=self.settings.fee_bps,
+            slippage_bps=self.settings.slippage * 10_000,
+            stop_loss_bps=self.settings.stop_loss_bps,
+            take_profit_bps=self.settings.take_profit_bps,
+            max_hold_seconds=self.settings.max_hold_seconds,
+        )
+        state = build_state(snap, view, ctx)
         decision = await self.model.decide(snap, state)
-        action = decision.action
-        probs = decision.probabilities or {}
-        conf = decision.confidence
-        if abs(pos.size) < 1e-12:
-            pb, ps = float(probs.get("buy") or 0), float(probs.get("sell") or 0)
-            split = pb + ps
-            if split > 0:
-                pb, ps = pb / split, ps / split
-                if max(pb, ps) >= self.settings.min_confidence:
-                    action = "buy" if pb >= ps else "sell"
-                    conf = max(pb, ps)
-        if action == "buy" and pos.size > 0:
-            action = "hold"
-        elif action == "sell" and pos.size < 0:
-            action = "hold"
+        if decision.latency_ms:
+            self.latencies.append(float(decision.latency_ms))
+
+        # 3. de-bias, then map the distribution onto the current position
+        raw_probs = decision.probabilities or {}
+        adjusted = raw_probs
+        if not decision.error:
+            adjusted = self.calibrator.adjust(symbol, raw_probs)
+            self.calibrator.observe(symbol, raw_probs)
+        res = resolve(adjusted, pos.size, self.settings)
+        action = res.action
+        conf = res.confidence
         if not decision.error:
             if action == "buy":
                 self.n_buy += 1
@@ -287,44 +341,57 @@ class Engine:
                 self.n_sell += 1
             else:
                 self.n_hold += 1
-        if decision.latency_ms:
-            self.latencies.append(float(decision.latency_ms))
 
         if decision.error:
             intent, reason = None, "model_error"
         elif action == "hold":
-            intent, reason = None, "model_hold" if decision.action == "hold" else (
-                "already_long" if pos.size > 0 else "already_short"
-            )
+            intent, reason = None, res.reason
         elif action == "buy" and not allowed["buy"]:
             intent, reason = None, "buy_not_allowed"
         elif action == "sell" and not allowed["sell"]:
             intent, reason = None, "sell_not_allowed"
+        elif res.reason.startswith("exit_"):
+            # flatten the whole position; a flip is "exit now, open next round if still wanted"
+            intent = close_intent(snap, pos, self.settings, res.reason)
+            reason = res.reason if intent is not None else "size_zero"
         else:
             intent, reason = decide_intent(
-                snap,
-                action,
-                conf,
-                decision.probabilities,
-                pos,
-                self.settings,
-                self.last_trade_at[symbol],
+                snap, action, conf, adjusted, pos, self.settings, last_at,
             )
+            if reason == "ok":
+                reason = res.reason
         dpub = {
             "symbol": symbol,
             "mid": snap.mid,
             "ts_ms": int(time.time() * 1000),
             **decision.as_public(),
+            "model_action": decision.action,
+            "adjusted": {k: round(v, 4) for k, v in adjusted.items()},
             "action": action,
+            "confidence": conf,
             "outcome": "trade" if intent is not None else "skip",
             "reason": reason,
+            "held_seconds": held,
         }
         self.last_decision = dpub
         self.decisions.append(dpub)
         self.hub.emit("decision", dpub)
         if intent is None:
             return dpub
+        return await self._submit(symbol, intent)
 
+    def _held_seconds(self, symbol: str, pos, now: float) -> float | None:
+        side = pos.side()
+        if side == "flat":
+            self.opened.pop(symbol, None)
+            return None
+        rec = self.opened.get(symbol)
+        if rec is None or rec[0] != side:
+            self.opened[symbol] = (side, now)
+            return 0.0
+        return now - rec[1]
+
+    async def _submit(self, symbol: str, intent) -> dict[str, Any]:
         result: OrderResult = await self.executor.submit(intent)
         opub = result.as_public()
         self.orders.append(opub)
@@ -332,6 +399,9 @@ class Engine:
         if result.filled or result.status in ("filled", "sent"):
             self.last_trade_at[symbol] = time.time()
         if result.filled:
+            pos = self.account.positions.get(symbol)
+            if pos is not None:
+                self._held_seconds(symbol, pos, time.time())
             self.hub.emit("fill", opub)
             self.hub.emit("account", self.account.as_public())
         return opub
