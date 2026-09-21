@@ -8,7 +8,7 @@ from typing import Any
 from app.config import Settings
 from app.executor import PaperAccount, decide_intent
 from app.market import LighterMarket
-from app.model import MockModel, OpenAIDecisionModel
+from app.model import DecisionModel
 from app.types import OrderResult
 
 
@@ -49,7 +49,7 @@ class Engine:
         self,
         settings: Settings,
         market: LighterMarket,
-        model: MockModel | OpenAIDecisionModel,
+        model: DecisionModel,
         executor,
         account: PaperAccount,
         hub: Hub,
@@ -66,25 +66,73 @@ class Engine:
         self.last_decision: dict[str, Any] | None = None
         self.last_trade_at: dict[str, float] = {s: 0.0 for s in settings.markets}
         self.orders: deque[dict[str, Any]] = deque(maxlen=200)
-        self.decisions: deque[dict[str, Any]] = deque(maxlen=200)
+        self.decisions: deque[dict[str, Any]] = deque(maxlen=400)
+        self.cycles: deque[dict[str, Any]] = deque(maxlen=400)
+        self.equity_curve: deque[dict[str, Any]] = deque(maxlen=800)
+        self.bh_mids: dict[str, float] = {}
+        self.created_at = time.time()
+        self.loop_started_at: float | None = None
+        self.n_cycles = 0
+        self.n_buy = 0
+        self.n_sell = 0
+        self.latencies: deque[float] = deque(maxlen=200)
+        self.best_round: dict[str, Any] | None = None
+        self.worst_round: dict[str, Any] | None = None
         self._lock = asyncio.Lock()
+        if hasattr(executor, "_refresh"):
+            executor._refresh = self.sync_live_account
+
+    def _buy_hold_equity(self) -> float | None:
+        if not self.settings.markets:
+            return None
+        rets = []
+        for s in self.settings.markets:
+            first = self.bh_mids.get(s)
+            mid = (self.tickers.get(s) or {}).get("mid")
+            if not first or not mid:
+                return None
+            rets.append(float(mid) / float(first))
+        return self.account.start_equity * (sum(rets) / len(rets))
+
+    def stats(self) -> dict[str, Any]:
+        n = self.n_buy + self.n_sell
+        elapsed = max(0.0, time.time() - (self.loop_started_at or self.created_at))
+        avg_lat = (sum(self.latencies) / len(self.latencies)) if self.latencies else 0.0
+        return {
+            "n_cycles": self.n_cycles,
+            "n_decisions": n,
+            "n_buy": self.n_buy,
+            "n_sell": self.n_sell,
+            "n_orders": len(self.orders),
+            "buy_rate": (self.n_buy / n) if n else 0.0,
+            "sell_rate": (self.n_sell / n) if n else 0.0,
+            "elapsed_s": elapsed,
+            "avg_latency_ms": avg_lat,
+            "decisions_per_min": (n / elapsed * 60) if elapsed > 1 else 0.0,
+        }
 
     def snapshot_state(self) -> dict[str, Any]:
         return {
             "running": self.running,
             "mode": self.settings.trading_mode,
             "model": self.model.name,
+            "backend": self.settings.resolved_backend,
             "remote_model": self.settings.use_remote_model,
             "markets": self.settings.markets,
             "loop_seconds": self.settings.loop_seconds,
             "trade_notional_usd": self.settings.trade_notional_usd,
             "min_confidence": self.settings.min_confidence,
-            "max_position_usd": self.settings.max_position_usd,
+            "max_position_usd": self.settings.position_cap,
             "account": self.account.as_public(),
             "tickers": self.tickers,
             "last_decision": self.last_decision,
             "orders": list(self.orders)[-80:],
             "decisions": list(self.decisions)[-80:],
+            "cycles": list(self.cycles)[-120:],
+            "equity_curve": list(self.equity_curve)[-400:],
+            "stats": self.stats(),
+            "best_round": self.best_round,
+            "worst_round": self.worst_round,
         }
 
     def start(self) -> None:
@@ -92,6 +140,8 @@ class Engine:
             self.running = True
             return
         self.running = True
+        if self.loop_started_at is None:
+            self.loop_started_at = time.time()
         self._task = asyncio.create_task(self._loop(), name="trade-loop")
         self.hub.emit("status", {"running": True})
 
@@ -111,6 +161,7 @@ class Engine:
         await self.executor.close()
 
     async def _loop(self) -> None:
+        await self.sync_live_account()
         while self.running:
             t0 = time.time()
             try:
@@ -120,14 +171,56 @@ class Engine:
             except Exception as e:
                 self.hub.emit("error", {"message": str(e)})
             elapsed = time.time() - t0
-            await asyncio.sleep(max(0.2, self.settings.loop_seconds - elapsed))
+            pause = self.settings.loop_seconds
+            if pause > 0:
+                await asyncio.sleep(max(0.05, pause - elapsed))
+            else:
+                await asyncio.sleep(0.05)
+
+    async def sync_live_account(self) -> None:
+        if not self.settings.live or self.settings.lighter_account_index is None:
+            return
+        try:
+            data = await self.market.account(self.settings.lighter_account_index)
+            self.account.apply_exchange(data)
+            self.hub.emit("account", self.account.as_public())
+        except Exception as e:
+            self.hub.emit("error", {"message": f"account {e}"})
 
     async def cycle(self) -> dict[str, Any]:
         async with self._lock:
+            await self.sync_live_account()
             results = []
             for symbol in self.settings.markets:
                 results.append(await self._cycle_symbol(symbol))
-            return {"ok": True, "results": results}
+            ts_ms = int(time.time() * 1000)
+            equity = self.account.equity()
+            bh = self._buy_hold_equity()
+            prev = self.equity_curve[-1]["equity"] if self.equity_curve else self.account.start_equity
+            delta = equity - prev
+            point = {
+                "ts_ms": ts_ms,
+                "equity": round(equity, 4),
+                "pnl_usd": round(equity - self.account.start_equity, 4),
+                "buy_hold": round(bh, 4) if bh is not None else None,
+            }
+            self.equity_curve.append(point)
+            self.n_cycles += 1
+            round_rec = {"ts_ms": ts_ms, "pnl": round(delta, 4), "equity": round(equity, 4)}
+            if self.best_round is None or delta > self.best_round["pnl"]:
+                self.best_round = round_rec
+            if self.worst_round is None or delta < self.worst_round["pnl"]:
+                self.worst_round = round_rec
+            cycle = {
+                "ts_ms": ts_ms,
+                "results": results,
+                "equity": round(equity, 4),
+                "account": self.account.as_public(),
+            }
+            self.cycles.append(cycle)
+            self.hub.emit("cycle", cycle)
+            self.hub.emit("account", self.account.as_public())
+            return {"ok": True, "results": results, "equity": point}
 
     async def _cycle_symbol(self, symbol: str) -> dict[str, Any]:
         try:
@@ -153,32 +246,34 @@ class Engine:
         }
         self.tickers[symbol] = ticker
         self.hub.emit("ticker", ticker)
+        if symbol not in self.bh_mids and snap.mid:
+            self.bh_mids[symbol] = snap.mid
 
         pos = self.account.positions[symbol]
         view = self.account.position_view(symbol)
         notional = abs(pos.size) * snap.mid
+        cap = self.settings.position_cap
         allowed = {
-            "buy": notional < self.settings.max_position_usd or pos.size < 0,
-            "sell": notional < self.settings.max_position_usd or pos.size > 0,
+            "buy": cap is None or notional < cap or pos.size < 0,
+            "sell": cap is None or notional < cap or pos.size > 0,
         }
         state = snap.state_text(view, allowed)
         decision = await self.model.decide(snap, state)
-        dpub = {
-            "symbol": symbol,
-            "mid": snap.mid,
-            **decision.as_public(),
-        }
-        self.last_decision = dpub
-        self.decisions.append(dpub)
-        self.hub.emit("decision", dpub)
+        if not decision.error:
+            if decision.action == "buy":
+                self.n_buy += 1
+            else:
+                self.n_sell += 1
+        if decision.latency_ms:
+            self.latencies.append(float(decision.latency_ms))
 
         action = decision.action
-        if action == "buy" and not allowed["buy"]:
-            skip = "buy_not_allowed"
-            intent, reason = None, skip
+        if decision.error:
+            intent, reason = None, "model_error"
+        elif action == "buy" and not allowed["buy"]:
+            intent, reason = None, "buy_not_allowed"
         elif action == "sell" and not allowed["sell"]:
-            skip = "sell_not_allowed"
-            intent, reason = None, skip
+            intent, reason = None, "sell_not_allowed"
         else:
             intent, reason = decide_intent(
                 snap,
@@ -189,17 +284,19 @@ class Engine:
                 self.settings,
                 self.last_trade_at[symbol],
             )
+        dpub = {
+            "symbol": symbol,
+            "mid": snap.mid,
+            "ts_ms": int(time.time() * 1000),
+            **decision.as_public(),
+            "outcome": "trade" if intent is not None else "skip",
+            "reason": reason,
+        }
+        self.last_decision = dpub
+        self.decisions.append(dpub)
+        self.hub.emit("decision", dpub)
         if intent is None:
-            skip_rec = {
-                "symbol": symbol,
-                "action": action,
-                "skip": reason,
-                "confidence": decision.confidence,
-                "probabilities": decision.probabilities,
-                "source": decision.source,
-            }
-            self.hub.emit("skip", skip_rec)
-            return skip_rec
+            return dpub
 
         result: OrderResult = await self.executor.submit(intent)
         opub = result.as_public()

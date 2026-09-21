@@ -63,6 +63,9 @@ class LighterMarket:
         self._meta = found
         self._meta_at = time.time()
 
+    async def account(self, account_index: int) -> dict[str, Any]:
+        return await self._get("/api/v1/account", by="index", value=str(account_index))
+
     def meta(self, symbol: str) -> MarketMeta:
         return self._meta[symbol.upper()]
 

@@ -3,318 +3,856 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>JEV × Lighter</title>
+  <title>trade the book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #07080a;
-      --panel: #101216;
-      --panel-2: #161a20;
-      --line: #2a3038;
-      --buy: #19e38a;
-      --buy-ink: #04150c;
-      --sell: #ff3b5c;
-      --sell-ink: #1a0308;
-      --hold: #8b93a7;
-      --text: #e7eadf;
-      --muted: #8b93a7;
-      --warn: #f5c542;
+      --bg: #f3efe6;
+      --paper: #fffcf7;
+      --ink: #161513;
+      --muted: #7a7468;
+      --faint: #a9a294;
+      --line: #e4ddd0;
+      --track: #ece7dc;
+      --buy: #1a1916;
+      --sell: #d94a3a;
+      --gain: #2f7a45;
+      --loss: #d94a3a;
+      --flash: #f0e6cf;
     }
-    .muted { color: var(--muted); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
-    button, input { font: inherit; }
-    code, .mono, .num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
-    header {
-      display: flex; align-items: center; gap: 16px; justify-content: space-between;
-      padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
-      background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); z-index: 2;
-    }
-    .brand { display: flex; flex-direction: column; gap: 2px; }
-    .brand strong { letter-spacing: 0.12em; font-size: 13px; }
-    .brand span { color: var(--muted); font-size: 12px; }
-    .pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .pill {
-      border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; font-size: 12px;
-      letter-spacing: 0.06em; text-transform: uppercase;
-    }
-    .pill.paper { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
-    .pill.live { color: var(--sell); border-color: color-mix(in srgb, var(--sell) 50%, var(--line)); }
-    .pill.on { color: var(--buy); }
-    .actions { display: flex; gap: 8px; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    body { font: 14px/1.45 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; padding-bottom: 44px; }
     button {
-      background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
-      padding: 8px 14px; border-radius: 6px; cursor: pointer;
+      font: inherit;
+      background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+      padding: 3px 9px; border-radius: 4px; cursor: pointer;
     }
-    button:hover { border-color: #4a5360; }
-    button.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
-    button.danger { color: var(--sell); border-color: color-mix(in srgb, var(--sell) 40%, var(--line)); }
-    button:focus-visible { outline: 2px solid var(--buy); outline-offset: 2px; }
-    main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 61px); }
-    aside { border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-    h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.16em; color: var(--muted); font-weight: 600; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
-    .ticker { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-    .ticker .sym { font-weight: 700; letter-spacing: 0.08em; }
-    .ticker .px { font-size: 20px; }
-    .up { color: var(--buy); }
-    .down { color: var(--sell); }
-    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; color: var(--muted); font-size: 12px; margin-top: 8px; }
-    .pos-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
-    .pos-row:last-child { border-bottom: 0; }
-    .blotter { padding: 16px 20px 40px; }
-    .blotter-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
-    .tickets { display: flex; flex-direction: column; gap: 10px; }
-    .ticket {
-      display: grid; grid-template-columns: 108px 1fr; min-height: 88px;
-      border: 1px solid var(--line); background: var(--panel); overflow: hidden;
+    button:hover { border-color: #b8b09f; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .serif { font-family: Fraunces, Georgia, serif; letter-spacing: -0.03em; }
+    .up { color: var(--gain); }
+    .down { color: var(--loss); }
+
+    /* header */
+    header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+      padding: 22px 28px 6px;
     }
-    .ticket .stub {
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 800; letter-spacing: 0.18em; font-size: 22px;
+    .brand h1 { font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 700; margin: 0; letter-spacing: -0.03em; }
+    .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .head-right { text-align: right; }
+    .speed { font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+    .speed .live { color: var(--sell); }
+    .meta-line { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .pulse {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--faint); margin-right: 8px; vertical-align: 2px;
     }
-    .ticket.buy .stub { background: var(--buy); color: var(--buy-ink); }
-    .ticket.sell .stub { background: var(--sell); color: var(--sell-ink); }
-    .ticket .body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 12px; }
-    .ticket .k { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
-    .ticket .v { font-size: 15px; }
-    .empty { color: var(--muted); padding: 24px; border: 1px dashed var(--line); }
-    .decisions { margin-top: 28px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
-    th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; }
-    .tag { display: inline-block; min-width: 48px; text-align: center; padding: 2px 8px; font-weight: 700; letter-spacing: 0.08em; }
-    .tag.buy { background: var(--buy); color: var(--buy-ink); }
-    .tag.sell { background: var(--sell); color: var(--sell-ink); }
-    .tag.hold { background: var(--panel-2); color: var(--hold); }
-    .bars { display: flex; height: 6px; background: var(--panel-2); overflow: hidden; }
-    .bars i { display: block; height: 100%; }
-    .bars .b { background: var(--buy); }
-    .bars .s { background: var(--sell); }
-    .bars .h { background: var(--hold); }
-    .err { color: var(--sell); font-size: 12px; }
-    @media (max-width: 860px) {
-      main { grid-template-columns: 1fr; }
-      aside { border-right: 0; border-bottom: 1px solid var(--line); }
-      .ticket { grid-template-columns: 72px 1fr; }
-      .ticket .stub { font-size: 14px; letter-spacing: 0.08em; }
-      .ticket .body { grid-template-columns: 1fr 1fr; }
+    .running .pulse { background: var(--sell); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+    /* kpis */
+    .kpis { display: grid; grid-template-columns: 1.4fr 1.1fr repeat(4, 1fr); gap: 10px; padding: 12px 28px 8px; }
+    .kpi { background: var(--paper); border: 1px solid var(--line); padding: 14px 16px; min-height: 96px; }
+    .kpi.dark { background: var(--ink); color: #f4efe6; border-color: var(--ink); --flash: #3a372f; }
+    .kpi .k { font-size: 11px; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 8px; }
+    .kpi.dark .k { color: #b7b1a4; }
+    .kpi .v {
+      font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;
+      font-variant-numeric: tabular-nums; display: inline-block; padding: 0 2px; margin: 0 -2px; border-radius: 3px;
     }
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; }
+    .kpi .s { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .kpi.dark .s { color: #c9c3b6; }
+    .kpi.dark .up { color: #8ee0a6; }
+    .kpi.dark .down { color: #ff8b7d; }
+    .tick { animation: flashBg 0.9s ease-out; }
+    @keyframes flashBg { from { background: var(--flash); } to { background: transparent; } }
+
+    /* layout & cards */
+    .layout { display: grid; grid-template-columns: 1.35fr 0.9fr; gap: 12px; padding: 8px 28px 24px; align-items: start; }
+    .col { display: grid; gap: 12px; }
+    .card { background: var(--paper); border: 1px solid var(--line); padding: 14px 16px; }
+    .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .card h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+    .card h2 b { color: var(--ink); font-weight: 600; }
+    .legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .legend i { display: inline-block; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; }
+    .empty { color: var(--faint); font-size: 12px; padding: 12px 0; }
+
+    /* wall */
+    .wall-row { display: grid; grid-template-columns: 42px 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .wall-row .lab { font-size: 12px; color: var(--muted); }
+    .slots { display: grid; grid-template-columns: repeat(var(--slots, 48), 1fr); gap: 2px; }
+    .cell { height: 26px; background: var(--track); }
+    .cell.buy { background: var(--buy); }
+    .cell.sell { background: var(--sell); }
+    .cell.new { animation: cellIn 0.5s ease-out; }
+    @keyframes cellIn { from { transform: scaleY(0.2); opacity: 0.4; } to { transform: none; opacity: 1; } }
+    .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 6px; padding-left: 50px; }
+
+    /* chart */
+    .chart-wrap { position: relative; }
+    #chart { width: 100%; height: 220px; display: block; }
+    .ylab { position: absolute; right: 0; font-size: 11px; color: var(--faint); background: var(--paper); padding: 0 4px; }
+    .ylab.top { top: 4px; } .ylab.bot { bottom: 4px; }
+    .chart-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
+    .dot { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
+
+    /* now */
+    .prices { display: grid; grid-template-columns: repeat(var(--m, 2), 1fr); gap: 10px; margin-bottom: 12px; }
+    .price { border: 1px solid var(--line); padding: 10px 12px; }
+    .price .sym { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+    .price .mid { font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin-top: 2px; transition: color 0.6s ease; }
+    .price .mid.rise { color: var(--gain); transition: none; }
+    .price .mid.fall { color: var(--loss); transition: none; }
+    .price .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .drow {
+      display: grid; grid-template-columns: 26px 40px 46px 1fr 40px; gap: 8px;
+      align-items: center; padding: 8px 0; border-top: 1px solid var(--line);
+    }
+    .drow .why { grid-column: 2 / -1; font-size: 11px; color: var(--muted); margin-top: -4px; }
+    .badge {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+    }
+    .act { font-size: 11px; letter-spacing: 0.08em; font-weight: 600; }
+    .act.buy { color: var(--ink); }
+    .act.sell { color: var(--sell); }
+    .pbar { display: flex; height: 8px; background: var(--track); overflow: hidden; }
+    .pbar i { display: block; height: 100%; transition: width 0.5s ease; }
+    .pbar .b { background: var(--buy); }
+    .pbar .s { background: var(--sell); }
+    .flash { animation: flashBg 0.9s ease-out; }
+
+    /* feed */
+    .fhead, .frow {
+      display: grid; grid-template-columns: 56px 34px 44px minmax(80px, 1fr) 42px 54px 84px;
+      gap: 8px; align-items: center; font-size: 12px;
+    }
+    .fhead { color: var(--faint); font-size: 11px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .frow { padding: 7px 0; border-bottom: 1px solid var(--line); min-height: 33px; cursor: pointer; }
+    .frow:hover { background: #f7f2e8; }
+    .frow.on { background: #f0e6cf; }
+    .frow.blank { border-bottom-color: transparent; cursor: default; }
+    .frow.blank { border-bottom-color: transparent; }
+    .frow .t { color: var(--muted); }
+    .frow .lat, .fhead .lat { text-align: right; color: var(--muted); }
+    .frow .why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .frow .why.traded { color: var(--gain); font-weight: 600; }
+    .frow .why.err { color: var(--sell); }
+    .conf { text-align: right; font-weight: 500; }
+    .anim-in { animation: rowIn 0.45s ease-out; }
+    @keyframes rowIn { from { opacity: 0; transform: translateY(-6px); background: var(--flash); } to { opacity: 1; transform: none; background: transparent; } }
+    .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .pager .nav { display: flex; gap: 4px; align-items: center; }
+    .pager button { padding: 3px 9px; font-size: 12px; }
+    .pill {
+      background: var(--ink); color: var(--paper); border: 0; border-radius: 999px; padding: 3px 10px; font-size: 11px; cursor: pointer;
+      animation: rowIn 0.3s ease-out;
+    }
+    .pill:hover { background: #2e2c27; }
+
+    /* book */
+    .book-head, .book-row {
+      display: grid; grid-template-columns: 72px repeat(var(--m, 2), minmax(48px, 1fr)) 120px;
+      gap: 6px; align-items: center; font-size: 12px;
+    }
+    .book-head { color: var(--faint); font-size: 11px; margin-bottom: 8px; }
+    .book-row { margin-bottom: 8px; }
+    .book-row .lab { color: var(--muted); }
+    .chip { min-height: 28px; display: flex; align-items: center; justify-content: center; background: var(--track); font-weight: 600; transition: background 0.4s ease; }
+    .chip.long { background: var(--buy); color: #f4efe6; }
+    .chip.short { background: var(--sell); color: #fff; }
+    .chip.flat { color: var(--faint); }
+    .right { text-align: right; }
+
+    /* extremes */
+    .extremes { background: var(--ink); color: #f4efe6; padding: 14px 16px; }
+    .extremes .k { font-size: 11px; color: #b7b1a4; margin-bottom: 8px; }
+    .ex-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: baseline; padding: 4px 0; }
+    .ex-row .lab { font-size: 12px; color: #c9c3b6; }
+    .ex-row .val { font-size: 22px; font-family: Fraunces, Georgia, serif; }
+    .ex-row .val.up { color: #8ee0a6; } .ex-row .val.down { color: #ff8b7d; }
+    .ex-row .note { font-size: 12px; color: #c9c3b6; text-align: right; }
+
+    /* status bar */
+    .statusbar {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 32px;
+      background: var(--paper); border-top: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+      font-size: 11px; color: var(--muted);
+    }
+    .nat-note { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+    .nat-q { font-family: Fraunces, Georgia, serif; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
+    .nat-pre {
+      margin: 0; padding: 10px 12px; background: #f7f2e8; border: 1px solid var(--line);
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; line-height: 1.45;
+      white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; color: #3a372f;
+    }
+    .nat-label { font-size: 11px; color: var(--faint); margin: 10px 0 6px; letter-spacing: 0.04em; }
+    .tok { display: grid; grid-template-columns: 56px 1fr 64px 72px; gap: 8px; align-items: center; font-size: 12px; padding: 4px 0; }
+    .tok .bar { height: 8px; background: var(--track); }
+    .tok .bar i { display: block; height: 100%; background: var(--buy); }
+    .tok.sell .bar i { background: var(--sell); }
+    .conn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 1px; }
+    .conn.ok { background: var(--gain); }
+    .conn.bad { background: var(--sell); animation: pulse 1s ease-in-out infinite; }
+
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media (max-width: 1100px) {
+      .kpis { grid-template-columns: 1fr 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      header { flex-direction: column; }
+      .head-right { text-align: left; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <strong>JEV × LIGHTER</strong>
-      <span>this-that 决策 · BTC / ETH 永续</span>
+      <h1>trade the book</h1>
+      <div class="sub" id="subtitle">纸上模拟 · Lighter 永续 · 等待连接</div>
     </div>
-    <div class="pills">
-      <span id="modePill" class="pill paper">PAPER</span>
-      <span id="runPill" class="pill">已停止</span>
-      <span id="modelPill" class="pill">mock</span>
-    </div>
-    <div class="actions">
-      <button id="onceBtn" type="button">跑一轮</button>
-      <button id="startBtn" class="primary" type="button">启动</button>
-      <button id="stopBtn" class="danger" type="button">停止</button>
+    <div class="head-right">
+      <div class="speed"><span class="pulse"></span><span id="speedText">连续运行</span></div>
+      <div class="meta-line"><span id="metaBackend">—</span> · <span id="metaState">LIVE</span> · <span class="num" id="clock"></span></div>
     </div>
   </header>
-  <main>
-    <aside>
-      <section>
-        <h2>行情</h2>
-        <div id="tickers"></div>
+
+  <section class="kpis">
+    <div class="kpi dark">
+      <div class="k">账户净值 · 本金 <span id="kStart">—</span></div>
+      <div class="v" id="kEquity">—</div>
+      <div class="s"><span id="kEquitySub">—</span></div>
+    </div>
+    <div class="kpi dark">
+      <div class="k">累计盈亏</div>
+      <div class="v" id="kPnl">—</div>
+      <div class="s"><span id="kPnlSub">—</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">已跑轮次</div>
+      <div class="v" id="kCycles">0</div>
+          <div class="s" id="kLoopHint">连续决策</div>
+    </div>
+    <div class="kpi">
+      <div class="k">决策数</div>
+      <div class="v" id="kDecisions">0</div>
+      <div class="s"><span id="kDecSub">—</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">已用时</div>
+      <div class="v" id="kElapsed">0:00</div>
+      <div class="s">模型延迟 <span id="kLatency">—</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">BUY 占比</div>
+      <div class="v" id="kBuyRate">—</div>
+      <div class="s"><span id="kBuySub">—</span></div>
+    </div>
+  </section>
+
+  <main class="layout">
+    <div class="col">
+      <section class="card">
+        <div class="card-head">
+          <h2>决策墙 · <b id="wallMeta">0 轮</b></h2>
+          <div class="legend">
+            <span><i style="background:var(--buy)"></i>BUY</span>
+            <span><i style="background:var(--sell)"></i>SELL</span>
+            <span><i style="background:var(--track)"></i>未到</span>
+          </div>
+        </div>
+        <div id="wall"></div>
+        <div class="axis"><span id="axisL">—</span><span>最近 <span id="axisN">48</span> 轮</span><span id="axisR">—</span></div>
       </section>
-      <section>
-        <h2>账户</h2>
-        <div class="card" id="account"></div>
-      </section>
-      <section>
-        <h2>说明</h2>
-        <div class="card" style="color:var(--muted);font-size:12px">
-          默认纸上交易，用 Lighter 真实盘口。模型返回 buy / sell / hold；只有置信度过线才会下单。实盘需 <code>TRADING_MODE=live</code>。
+      <section class="card">
+        <div class="card-head">
+          <h2>账户净值 · 起点 <b id="startEq">—</b></h2>
+          <div class="legend"><span id="chartRange">—</span></div>
+        </div>
+        <div class="chart-wrap">
+          <svg id="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
+          <span class="ylab top num" id="yTop"></span>
+          <span class="ylab bot num" id="yBot"></span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="dot" style="background:#161513"></i>策略 <span class="num" id="legEq">—</span></span>
+          <span><i class="dot" style="background:#b8b09f"></i>等权买入持有 <span class="num" id="legBh">—</span></span>
+          <span><i class="dot" style="background:#d9d2c4"></i>本金线</span>
         </div>
       </section>
-    </aside>
-    <section class="blotter">
-      <div class="blotter-head">
-        <h2>下单动作 · BUY / SELL</h2>
-        <span class="mono" id="clock"></span>
-      </div>
-      <div id="tickets" class="tickets"></div>
-      <div class="decisions">
-        <h2>决策记录</h2>
-        <table>
-          <thead>
-            <tr><th>时间</th><th>市场</th><th>动作</th><th>置信</th><th>分布</th><th>备注</th></tr>
-          </thead>
-          <tbody id="decisions"></tbody>
-        </table>
-      </div>
-    </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <div class="card-head">
+          <h2>当前决策 · <b id="nowWhen">—</b></h2>
+          <div class="legend"><span>置信门槛 <span class="num" id="nowThreshold">—</span></span></div>
+        </div>
+        <div class="prices" id="prices"></div>
+        <div id="nowRows"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>模型原声 · <b id="natMeta">—</b></h2>
+          <div class="legend" id="natFollow"></div>
+        </div>
+        <p class="nat-note">this-that 没有思维链。原生结果是枚举选项上的校准概率，不是一段推理文字。</p>
+        <div class="nat-q" id="natQuestion">等待模型…</div>
+        <div class="nat-label">TOKEN LOGPROBS</div>
+        <div id="natTokens"></div>
+        <div class="nat-label">MESSAGE.CONTENT</div>
+        <pre class="nat-pre" id="natContent">—</pre>
+        <div class="nat-label">THIS_THAT</div>
+        <pre class="nat-pre" id="natExtra">—</pre>
+        <div class="nat-label">PROMPT / 市场状态</div>
+        <pre class="nat-pre" id="natPrompt">—</pre>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>模型决策流 · 共 <b id="feedCount">0</b> 条</h2>
+          <div class="legend" id="feedNew"></div>
+        </div>
+        <div class="fhead">
+          <div>时间</div><div>标的</div><div>动作</div><div>BUY ← 概率 → SELL</div><div class="right">置信</div><div class="lat">延迟</div><div>结果</div>
+        </div>
+        <div id="feed"></div>
+        <div class="pager">
+          <span id="pageInfo">—</span>
+          <div class="nav">
+            <button id="pgFirst" type="button" title="最新">«</button>
+            <button id="pgPrev" type="button">‹</button>
+            <span class="num" id="pageNum">1 / 1</span>
+            <button id="pgNext" type="button">›</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>持仓与盈亏</h2>
+          <div class="legend"><span>单标的仓位 <span class="num" id="maxPos">不限</span></span></div>
+        </div>
+        <div id="book"></div>
+      </section>
+
+      <section class="extremes">
+        <div class="k">至今最赚 / 最亏 · 单轮净值变动</div>
+        <div id="extremes"></div>
+      </section>
+    </div>
   </main>
+
+  <div class="statusbar">
+    <span><i class="conn" id="conn"></i><span id="connText">连接中</span></span>
+    <span>最后事件 <span class="num" id="lastEvt">—</span> · 事件流 /api/events</span>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
-    const state = { orders: [], decisions: [], tickers: {}, account: null, running: false, mode: "paper", model: "mock" };
+    const PAGE_SIZE = 10;
+    const WALL_SLOTS = 48;
+    const KEEP_DECISIONS = 200;
 
+    const state = {
+      running: false, mode: "paper", model: "mock", backend: "",
+      markets: ["BTC", "ETH"], loop_seconds: 20, min_confidence: 0.58, max_position_usd: null,
+      tickers: {}, prevMid: {}, account: null, cycles: [], equity_curve: [],
+      stats: {}, best_round: null, worst_round: null, orders: [],
+      decisions: [], lastBySymbol: {},
+    };
+    const feed = { page: 1, unseen: 0 };
+    let inspectKey = null;
+    let lastWallTs = null;
+    let connectedOnce = false;
+
+    const REASON_ZH = {
+      ok: "已下单", cooldown: "冷却中", max_position: "仓位上限",
+      buy_not_allowed: "买入受限", sell_not_allowed: "卖出受限",
+      model_error: "模型错误", unknown_action: "未知动作", size_zero: "数量为零",
+    };
+    function reasonText(d) {
+      if (d.error) return "错误";
+      const r = d.reason || "";
+      if (REASON_ZH[r]) return REASON_ZH[r];
+      if (r.startsWith("low_confidence")) return "置信不足";
+      return r || (d.outcome === "trade" ? "已下单" : "");
+    }
+
+    /* ---------- formatting ---------- */
     function fmt(n, d=2) {
-      if (n === null || n === undefined || Number.isNaN(n)) return "—";
+      if (n == null || Number.isNaN(n)) return "—";
       return Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
     }
-    function pct(n) {
-      if (n === null || n === undefined) return "—";
-      const v = Number(n);
-      const s = (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
-      return s;
+    function money(n, d=2) {
+      if (n == null || Number.isNaN(n)) return "—";
+      return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
     }
-    function ts(ms) {
-      const d = new Date(ms || Date.now());
-      return d.toLocaleTimeString("zh-CN", { hour12: false });
+    function signedMoney(n, d=2) {
+      if (n == null || Number.isNaN(n)) return "—";
+      const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+      return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
     }
-    function renderTickers() {
-      const el = $("tickers");
-      const syms = ["BTC", "ETH"];
-      el.innerHTML = syms.map(sym => {
-        const t = state.tickers[sym];
-        if (!t) return `<div class="card"><div class="ticker"><span class="sym">${sym}</span><span class="muted">等待盘口</span></div></div>`;
-        const ch = Number(t.change);
-        const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
-        return `<div class="card">
-          <div class="ticker"><span class="sym">${sym}</span><span class="px num ${cls}">${fmt(t.mid, 1)}</span></div>
-          <div class="meta">
-            <span>买 ${fmt(t.bid, 1)}</span><span>卖 ${fmt(t.ask, 1)}</span>
-            <span>点差 ${fmt(t.spread_bps, 2)} bps</span>
-            <span class="${cls}">日变 ${fmt(t.change, 2)}</span>
-            <span>资金费率 ${t.funding == null ? "—" : Number(t.funding).toExponential(2)}</span>
-            <span>1h ${t.ret_1h_bps == null ? "—" : fmt(t.ret_1h_bps, 1) + " bps"}</span>
-          </div>
+    function clsPnl(n) { return n > 0 ? "up" : n < 0 ? "down" : ""; }
+    function clock(ms) { return new Date(ms || Date.now()).toLocaleString("zh-CN", { hour12: false }); }
+    function hms(ms) { return new Date(ms || Date.now()).toLocaleTimeString("zh-CN", { hour12: false }); }
+    function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+    /* set text; flash when it changes */
+    function setText(id, text, opts = {}) {
+      const el = $(id);
+      if (!el) return;
+      const s = String(text);
+      if (el.textContent === s) return;
+      el.textContent = s;
+      if (opts.cls !== undefined) {
+        el.classList.remove("up", "down");
+        if (opts.cls) el.classList.add(opts.cls);
+      }
+      if (opts.flash) { el.classList.remove("tick"); void el.offsetWidth; el.classList.add("tick"); }
+    }
+
+    /* ---------- static-ish: config ---------- */
+    function renderConfig() {
+      $("subtitle").textContent =
+        `${state.mode === "live" ? "Lighter 实盘" : "纸上模拟"} · ${(state.markets || []).join(" / ")} 永续 · ${state.model} · 连续决策`;
+      setText("nowThreshold", `${(state.min_confidence * 100).toFixed(0)}%`);
+      setText("maxPos", state.max_position_usd ? money(state.max_position_usd, 0) : "不限");
+      setText("metaBackend", state.backend || "mock");
+      setText("axisN", WALL_SLOTS);
+      $("prices").style.setProperty("--m", (state.markets || []).length || 2);
+    }
+
+    /* ---------- header status ---------- */
+    function renderStatus() {
+      document.body.classList.toggle("running", true);
+      $("speedText").innerHTML = state.mode === "live"
+        ? `实盘 <span class="live">连续</span>`
+        : `连续运行`;
+      setText("metaState", state.mode === "live" ? "LIVE" : (state.running ? "PAPER" : "…"));
+    }
+
+    /* ---------- KPIs (in-place) ---------- */
+    function renderKpis() {
+      const a = state.account || {};
+      const st = state.stats || {};
+      const equity = a.equity ?? a.start_equity;
+      const pnl = a.pnl_usd ?? 0;
+      const pct = a.pnl_pct ?? 0;
+      setText("kStart", money(a.start_equity, 0));
+      setText("kEquity", money(equity), { flash: true });
+      setText("kEquitySub", `现金 ${money(a.cash)} · 浮动 ${signedMoney((a.equity || 0) - (a.cash || 0))}`);
+      setText("kPnl", signedMoney(pnl), { flash: true, cls: clsPnl(pnl) });
+      setText("kPnlSub", `${pct >= 0 ? "+" : ""}${fmt(pct, 4)}% · 对照等权买入持有见图`);
+      setText("kCycles", st.n_cycles || 0, { flash: true });
+      setText("kDecisions", st.n_decisions || 0, { flash: true });
+      setText("kDecSub", `${fmt(st.decisions_per_min || 0, 1)} 次/分 · 下单 ${st.n_orders || 0}`);
+      setText("kLatency", `${fmt(st.avg_latency_ms || 0, 0)} ms`);
+      const n = (st.n_buy || 0) + (st.n_sell || 0);
+      setText("kBuyRate", n ? `${fmt((st.n_buy || 0) / n * 100, 0)}%` : "—", { flash: true });
+      setText("kBuySub", `BUY ${st.n_buy || 0} · SELL ${st.n_sell || 0}`);
+      renderElapsed();
+    }
+    function renderElapsed() {
+      const e = (state.stats || {}).elapsed_s || 0;
+      const h = Math.floor(e / 3600), m = Math.floor((e % 3600) / 60), s = Math.floor(e % 60);
+      setText("kElapsed", h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`);
+    }
+
+    /* ---------- wall ---------- */
+    function renderWall() {
+      const markets = state.markets || [];
+      const cycles = state.cycles.slice(-WALL_SLOTS);
+      setText("wallMeta", `${state.stats?.n_cycles || cycles.length} 轮`);
+      const pad = WALL_SLOTS - cycles.length;
+      const newest = cycles.length ? cycles[cycles.length - 1].ts_ms : null;
+      const animateLast = newest != null && newest !== lastWallTs;
+      lastWallTs = newest;
+      $("wall").innerHTML = markets.map(sym => {
+        const cells = [];
+        for (let i = 0; i < pad; i++) cells.push(`<div class="cell"></div>`);
+        cycles.forEach((c, i) => {
+          const r = (c.results || []).find(x => x.symbol === sym) || {};
+          const act = (r.action || "").toLowerCase();
+          const isNew = animateLast && i === cycles.length - 1 ? " new" : "";
+          const tip = act ? `${sym} ${act.toUpperCase()} · ${hms(c.ts_ms)}${r.outcome === "trade" ? " · 已下单" : ""}` : `${sym} · ${hms(c.ts_ms)}`;
+          cells.push(`<div class="cell ${act}${isNew}" title="${esc(tip)}"></div>`);
+        });
+        return `<div class="wall-row"><div class="lab">${esc(sym)}</div><div class="slots" style="--slots:${WALL_SLOTS}">${cells.join("")}</div></div>`;
+      }).join("");
+      setText("axisL", cycles.length ? hms(cycles[0].ts_ms) : "—");
+      setText("axisR", cycles.length ? hms(cycles[cycles.length - 1].ts_ms) : "—");
+    }
+
+    /* ---------- chart ---------- */
+    function renderChart() {
+      const svg = $("chart");
+      const pts = state.equity_curve || [];
+      const start = (state.account || {}).start_equity;
+      setText("startEq", money(start));
+      if (pts.length < 2) {
+        svg.innerHTML = "";
+        setText("chartRange", "第二轮后出现曲线");
+        setText("yTop", ""); setText("yBot", "");
+        setText("legEq", money(start)); setText("legBh", "—");
+        return;
+      }
+      const w = 640, h = 220, pad = 10;
+      const ys = pts.flatMap(p => [p.equity, p.buy_hold].filter(v => v != null));
+      ys.push(start);
+      let min = Math.min(...ys), max = Math.max(...ys);
+      const minSpan = Math.max(Math.abs(start) * 0.00005, 0.25);
+      if (max - min < minSpan) { const mid = (max + min) / 2; min = mid - minSpan / 2; max = mid + minSpan / 2; }
+      const span = max - min; min -= span * 0.1; max += span * 0.1;
+      const x = (i) => pad + i * (w - pad * 2) / (pts.length - 1);
+      const y = (v) => pad + (1 - (v - min) / (max - min)) * (h - pad * 2);
+      const path = (key) => pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p[key] ?? p.equity).toFixed(1)}`).join(" ");
+      const last = pts[pts.length - 1];
+      const hasBh = pts.some(p => p.buy_hold != null);
+      const y0 = y(start);
+      const gain = last.equity >= start;
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="${gain ? "#2f7a45" : "#d94a3a"}" stop-opacity="0.16"/>
+            <stop offset="1" stop-color="${gain ? "#2f7a45" : "#d94a3a"}" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M${pad},${y0.toFixed(1)} H${w - pad}" stroke="#d9d2c4" stroke-dasharray="4 4" fill="none"/>
+        <path d="${path("equity")} L${x(pts.length - 1).toFixed(1)},${y0.toFixed(1)} L${pad},${y0.toFixed(1)} Z" fill="url(#fill)" stroke="none"/>
+        ${hasBh ? `<path d="${path("buy_hold")}" fill="none" stroke="#b8b09f" stroke-dasharray="5 4" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : ""}
+        <path d="${path("equity")}" fill="none" stroke="#161513" stroke-width="2" vector-effect="non-scaling-stroke"/>
+        <circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last.equity).toFixed(1)}" r="3.5" fill="${gain ? "#2f7a45" : "#d94a3a"}"/>`;
+      setText("yTop", money(max)); setText("yBot", money(min));
+      setText("chartRange", `${hms(pts[0].ts_ms)} → ${hms(last.ts_ms)} · ${pts.length} 点`);
+      setText("legEq", money(last.equity));
+      setText("legBh", hasBh ? money(last.buy_hold) : "—");
+    }
+
+    /* ---------- now: prices + latest decision per market ---------- */
+    function pbarHtml(p) {
+      const b = p.buy || 0, s = p.sell || 0, tot = (b + s) || 1;
+      return `<div class="pbar" title="buy ${fmt(b / tot * 100, 0)} / sell ${fmt(s / tot * 100, 0)}">
+        <i class="b" style="width:${(b / tot * 100).toFixed(1)}%"></i>
+        <i class="s" style="width:${(s / tot * 100).toFixed(1)}%"></i>
+      </div>`;
+    }
+    function ensurePriceCards() {
+      const markets = state.markets || [];
+      const box = $("prices");
+      if (box.children.length === markets.length && [...box.children].every((el, i) => el.dataset.sym === markets[i])) return;
+      box.innerHTML = markets.map(s => `
+        <div class="price" data-sym="${esc(s)}">
+          <div class="sym">${esc(s)}-USD</div>
+          <div class="mid num" id="mid-${esc(s)}">—</div>
+          <div class="meta" id="pmeta-${esc(s)}">等待盘口</div>
+        </div>`).join("");
+    }
+    function renderPrice(sym) {
+      ensurePriceCards();
+      const t = state.tickers[sym];
+      if (!t) return;
+      const el = $(`mid-${sym}`);
+      if (!el) return;
+      const prev = state.prevMid[sym];
+      const txt = fmt(t.mid, t.mid >= 1000 ? 1 : 2);
+      if (el.textContent !== txt) {
+        el.textContent = txt;
+        el.classList.remove("rise", "fall");
+        if (prev != null && t.mid !== prev) {
+          void el.offsetWidth;
+          el.classList.add(t.mid > prev ? "rise" : "fall");
+          setTimeout(() => el.classList.remove("rise", "fall"), 60);
+        }
+      }
+      state.prevMid[sym] = t.mid;
+      const ch = t.change == null ? "" : `日变 ${t.change >= 0 ? "+" : ""}${fmt(t.change, 2)}% · `;
+      setText(`pmeta-${sym}`, `${ch}价差 ${fmt(t.spread_bps, 1)}bp · 不平衡 ${fmt(t.imbalance, 2)}`);
+    }
+    function renderNow() {
+      ensurePriceCards();
+      (state.markets || []).forEach(renderPrice);
+      const rows = (state.markets || []).map(s => state.lastBySymbol[s]).filter(Boolean);
+      const latest = rows.reduce((m, r) => Math.max(m, r.ts_ms || 0), 0);
+      setText("nowWhen", latest ? hms(latest) : "—");
+      if (!rows.length) { $("nowRows").innerHTML = `<div class="empty">启动后，每个标的的最新判断会显示在这里。</div>`; return; }
+      $("nowRows").innerHTML = rows.map(r => {
+        const p = r.probabilities || {};
+        const act = (r.action || "buy").toLowerCase();
+        const traded = r.outcome === "trade";
+        return `<div class="drow" data-sym="${esc(r.symbol)}">
+          <div class="badge">${esc((r.symbol || "?")[0])}</div>
+          <div>${esc(r.symbol)}</div>
+          <div class="act ${act}">${act.toUpperCase()}</div>
+          ${pbarHtml(p)}
+          <div class="num right">${fmt((r.confidence || 0) * 100, 0)}%</div>
+          <div class="why ${traded ? "up" : ""}">${traded ? "已下单" : reasonText(r)} · ${fmt(r.latency_ms || 0, 0)}ms · ${hms(r.ts_ms)}</div>
         </div>`;
       }).join("");
     }
-    function renderAccount() {
-      const a = state.account;
-      if (!a) { $("account").textContent = "—"; return; }
-      const rows = (a.positions || []).map(p => {
-        const cls = p.unrealized_usd > 0 ? "up" : p.unrealized_usd < 0 ? "down" : "";
-        return `<div class="pos-row"><span>${p.symbol} ${p.side}</span><span class="num ${cls}">${fmt(p.size, 5)} · ${fmt(p.unrealized_usd, 2)}</span></div>`;
-      }).join("");
-      const pnlCls = a.pnl_usd > 0 ? "up" : a.pnl_usd < 0 ? "down" : "";
-      $("account").innerHTML = `<div>权益 <span class="num">${fmt(a.equity, 2)}</span></div>
-        <div>PnL <span class="num ${pnlCls}">${fmt(a.pnl_usd, 2)}</span></div>${rows}`;
+    function flashNowRow(sym) {
+      const el = document.querySelector(`.drow[data-sym="${sym}"]`);
+      if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
     }
-    function renderTickets() {
-      const orders = state.orders.filter(o => o.action === "buy" || o.action === "sell").slice().reverse();
-      if (!orders.length) {
-        $("tickets").innerHTML = `<div class="empty">还没有下单。点「跑一轮」或「启动」后，买入/卖出会出现在这里。</div>`;
+
+    function decisionKey(d) { return `${d.ts_ms}|${d.symbol || ""}`; }
+    function inspectedDecision() {
+      if (inspectKey) {
+        const hit = state.decisions.find(d => decisionKey(d) === inspectKey);
+        if (hit) return hit;
+      }
+      return state.decisions.length ? state.decisions[state.decisions.length - 1] : null;
+    }
+    function followLatest() {
+      const last = state.decisions[state.decisions.length - 1];
+      return !inspectKey || (last && inspectKey === decisionKey(last));
+    }
+    function renderNative() {
+      const d = inspectedDecision();
+      const following = followLatest();
+      $("natFollow").innerHTML = following
+        ? `<span>跟随最新</span>`
+        : `<button class="pill" id="natLive" type="button">回到最新</button>`;
+      const btn = $("natLive");
+      if (btn) btn.onclick = () => { inspectKey = null; renderNative(); renderFeed(false); };
+      if (!d) {
+        setText("natMeta", "—");
+        setText("natQuestion", "等待模型…");
+        $("natTokens").innerHTML = "";
+        $("natContent").textContent = "—";
+        $("natExtra").textContent = "—";
+        $("natPrompt").textContent = "—";
         return;
       }
-      $("tickets").innerHTML = orders.map(o => {
-        const side = o.action;
-        const label = side === "buy" ? "BUY" : "SELL";
-        const zh = side === "buy" ? "买入" : "卖出";
-        return `<article class="ticket ${side}" aria-label="${zh} ${o.symbol}">
-          <div class="stub">${label}</div>
-          <div class="body">
-            <div><div class="k">市场</div><div class="v">${o.symbol}</div></div>
-            <div><div class="k">数量</div><div class="v num">${fmt(o.size, 5)}</div></div>
-            <div><div class="k">价格</div><div class="v num">${fmt(o.price, 1)}</div></div>
-            <div><div class="k">状态</div><div class="v">${o.status}${o.mode === "paper" ? " · 纸上" : ""}</div></div>
-            <div><div class="k">置信</div><div class="v num">${fmt((o.confidence || 0) * 100, 1)}%</div></div>
-            <div><div class="k">时间</div><div class="v num">${ts(o.ts_ms)}</div></div>
-            ${o.error ? `<div style="grid-column:1/-1" class="err">${o.error}</div>` : ""}
-            ${o.tx_hash ? `<div style="grid-column:1/-1" class="mono" style="font-size:11px;color:var(--muted)">${o.tx_hash}</div>` : ""}
-          </div>
-        </article>`;
+      setText("natMeta", `${d.symbol || "?"} · ${hms(d.ts_ms)} · ${d.source || ""}`);
+      setText("natQuestion", d.question || "Should the execution system buy or sell this perpetual now?");
+      const tops = (d.logprobs && d.logprobs[0] && d.logprobs[0].top) || [];
+      if (tops.length) {
+        $("natTokens").innerHTML = tops.map(t => {
+          const tok = String(t.token || "").replace(/"/g, "");
+          const p = t.p != null ? t.p : Math.exp(t.logprob || -99);
+          const kind = tok === "sell" ? "sell" : "buy";
+          return `<div class="tok ${kind}">
+            <div class="act ${kind}">${esc(tok.toUpperCase())}</div>
+            <div class="bar"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+            <div class="num right">${fmt(p * 100, 1)}%</div>
+            <div class="num" style="color:var(--faint)">lp ${fmt(t.logprob, 3)}</div>
+          </div>`;
+        }).join("");
+      } else {
+        const p = d.probabilities || {};
+        $("natTokens").innerHTML = ["buy", "sell"].map(k =>
+          `<div class="tok ${k}"><div class="act ${k}">${k.toUpperCase()}</div><div class="bar"><i style="width:${((p[k] || 0) * 100).toFixed(1)}%"></i></div><div class="num right">${fmt((p[k] || 0) * 100, 1)}%</div><div></div></div>`
+        ).join("");
+      }
+      $("natContent").textContent = d.content || d.raw || "—";
+      $("natExtra").textContent = d.this_that ? JSON.stringify(d.this_that, null, 2) : "（响应未带 this_that 扩展）";
+      $("natPrompt").textContent = d.prompt || "—";
+    }
+    function renderFeed(newArrived) {
+      const all = state.decisions.slice().reverse();
+      const total = all.length;
+      const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (feed.page > pages) feed.page = pages;
+      if (newArrived && feed.page !== 1) feed.unseen += 1;
+      if (feed.page === 1) feed.unseen = 0;
+
+      setText("feedCount", state.stats?.n_decisions ?? total);
+      $("feedNew").innerHTML = feed.unseen
+        ? `<button class="pill" id="jumpNew" type="button">↑ ${feed.unseen} 条新决策</button>`
+        : `<span>每页 ${PAGE_SIZE} 行 · 保留最近 ${KEEP_DECISIONS} 条</span>`;
+      const jump = $("jumpNew");
+      if (jump) jump.onclick = () => { feed.page = 1; renderFeed(false); };
+
+      const startIdx = (feed.page - 1) * PAGE_SIZE;
+      const rows = all.slice(startIdx, startIdx + PAGE_SIZE);
+      const html = rows.map((d, i) => {
+        const act = (d.action || "buy").toLowerCase();
+        const traded = d.outcome === "trade" || d.reason === "ok";
+        const whyCls = d.error ? "why err" : traded ? "why traded" : "why";
+        const why = d.error ? `错误 ${String(d.error).slice(0, 40)}` : reasonText(d);
+        const anim = newArrived && feed.page === 1 && i === 0 ? " anim-in" : "";
+        const on = inspectKey === decisionKey(d) || (!inspectKey && i === 0 && feed.page === 1) ? " on" : "";
+        return `<div class="frow${anim}${on}" data-key="${esc(decisionKey(d))}">
+          <div class="t num">${hms(d.ts_ms)}</div>
+          <div>${esc(d.symbol)}</div>
+          <div class="act ${act}">${act.toUpperCase()}</div>
+          ${pbarHtml(d.probabilities || {})}
+          <div class="conf num">${fmt((d.confidence || 0) * 100, 0)}%</div>
+          <div class="lat num">${fmt(d.latency_ms || 0, 0)}ms</div>
+          <div class="${whyCls}" title="${esc(d.reason || d.error || "")}">${esc(why)}</div>
+        </div>`;
+      });
+      for (let i = rows.length; i < PAGE_SIZE; i++) html.push(`<div class="frow blank"></div>`);
+      if (!total) html[0] = `<div class="frow blank"><div class="empty" style="grid-column:1/-1">模型的每一次判断都会出现在这里：动作、买卖概率、置信度、延迟和执行结果。</div></div>`;
+      $("feed").innerHTML = html.join("");
+      $("feed").onclick = (e) => {
+        const row = e.target.closest(".frow[data-key]");
+        if (!row) return;
+        inspectKey = row.getAttribute("data-key");
+        renderNative();
+        renderFeed(false);
+      };
+
+      setText("pageInfo", total ? `第 ${startIdx + 1}–${Math.min(startIdx + PAGE_SIZE, total)} 条 · 共 ${total} 条` : "暂无记录");
+      setText("pageNum", `${feed.page} / ${pages}`);
+      $("pgFirst").disabled = $("pgPrev").disabled = feed.page <= 1;
+      $("pgNext").disabled = feed.page >= pages;
+    }
+    $("pgFirst").onclick = () => { feed.page = 1; renderFeed(false); };
+    $("pgPrev").onclick = () => { feed.page = Math.max(1, feed.page - 1); renderFeed(false); };
+    $("pgNext").onclick = () => { feed.page += 1; renderFeed(false); };
+
+    /* ---------- book ---------- */
+    function renderBook() {
+      const a = state.account;
+      const markets = state.markets || [];
+      if (!a) { $("book").innerHTML = ""; return; }
+      const bySym = Object.fromEntries((a.positions || []).map(p => [p.symbol, p]));
+      const heads = markets.map(s => `<div>${esc(s)}</div>`).join("");
+      const chips = markets.map(s => {
+        const p = bySym[s] || { side: "flat" };
+        const signed = (p.notional_usd || 0) * (p.side === "short" ? -1 : p.side === "long" ? 1 : 0);
+        const kind = p.side === "long" ? "long" : p.side === "short" ? "short" : "flat";
+        const label = kind === "flat" ? "FLAT" : `${kind === "long" ? "多" : "空"} ${signedMoney(signed, 0)}`;
+        const tip = kind === "flat" ? `${s} 空仓` : `${s} ${kind} ${fmt(p.size, 6)} @ ${fmt(p.entry, 2)}`;
+        return `<div class="chip ${kind}" title="${esc(tip)}">${label}</div>`;
       }).join("");
-    }
-    function bar(p) {
-      const b = (p.buy || 0) * 100, s = (p.sell || 0) * 100, h = (p.hold || 0) * 100;
-      return `<div class="bars" title="buy ${b.toFixed(0)} / sell ${s.toFixed(0)} / hold ${h.toFixed(0)}"><i class="b" style="width:${b}%"></i><i class="s" style="width:${s}%"></i><i class="h" style="width:${h}%"></i></div>`;
-    }
-    function renderDecisions() {
-      const rows = state.decisions.slice().reverse().slice(0, 40);
-      $("decisions").innerHTML = rows.map(d => {
-        const note = d.error || d.skip || d.source || "";
-        return `<tr>
-          <td class="num">${ts(d.ts_ms)}</td>
-          <td>${d.symbol || ""}</td>
-          <td><span class="tag ${d.action}">${(d.action || "").toUpperCase()}</span></td>
-          <td class="num">${fmt((d.confidence || 0) * 100, 1)}%</td>
-          <td>${bar(d.probabilities || {})}</td>
-          <td class="err" style="color:var(--muted)">${note}</td>
-        </tr>`;
+      const upnl = markets.map(s => {
+        const p = bySym[s];
+        if (!p || p.side === "flat") return `<div class="num" style="color:var(--faint)">—</div>`;
+        return `<div class="num ${clsPnl(p.unrealized_usd)}">${signedMoney(p.unrealized_usd)}</div>`;
       }).join("");
+      const realized = (a.positions || []).reduce((s, p) => s + (p.realized_usd || 0), 0);
+      const pnl = a.pnl_usd || 0;
+      $("book").style.setProperty("--m", markets.length);
+      $("book").innerHTML = `
+        <div class="book-head"><div></div>${heads}<div class="right">净值</div></div>
+        <div class="book-row">
+          <div class="lab">仓位</div>${chips}
+          <div class="num right ${clsPnl(pnl)}">${money(a.equity)}<div style="font-size:11px;color:var(--muted)">${pnl >= 0 ? "+" : ""}${fmt(a.pnl_pct || 0, 4)}%</div></div>
+        </div>
+        <div class="book-row">
+          <div class="lab">浮动盈亏</div>${upnl}
+          <div class="right" style="font-size:11px;color:var(--muted)">已实现 <span class="num ${clsPnl(realized)}">${signedMoney(realized)}</span></div>
+        </div>`;
     }
+
+    /* ---------- extremes ---------- */
+    function renderExtremes() {
+      const row = (lab, rec, good) => rec
+        ? `<div class="ex-row"><div class="lab">${lab}</div><div class="val num ${good ? "up" : "down"}">${signedMoney(rec.pnl)}</div><div class="note">${hms(rec.ts_ms)}</div></div>`
+        : `<div class="ex-row"><div class="lab">${lab}</div><div class="val" style="color:#7a7468">—</div><div></div></div>`;
+      $("extremes").innerHTML = row("最赚", state.best_round, true) + row("最亏", state.worst_round, false);
+    }
+
+    function renderAll() {
+      renderConfig(); renderStatus(); renderKpis(); renderWall(); renderChart(); renderNow(); renderFeed(false); renderNative(); renderBook(); renderExtremes();
+    }
+
+    /* ---------- state ingestion ---------- */
     function applySnapshot(s) {
       if (!s) return;
-      state.running = !!s.running;
-      state.mode = s.mode || "paper";
-      state.model = s.model || "mock";
-      state.tickers = s.tickers || state.tickers;
-      state.account = s.account || state.account;
-      if (Array.isArray(s.orders)) state.orders = s.orders;
-      if (Array.isArray(s.decisions)) state.decisions = s.decisions;
-      $("modePill").textContent = state.mode === "live" ? "LIVE" : "PAPER";
-      $("modePill").className = "pill " + (state.mode === "live" ? "live" : "paper");
-      $("runPill").textContent = state.running ? "运行中" : "已停止";
-      $("runPill").className = "pill" + (state.running ? " on" : "");
-      $("modelPill").textContent = state.model;
-      renderTickers(); renderAccount(); renderTickets(); renderDecisions();
+      Object.assign(state, {
+        running: !!s.running, mode: s.mode || "paper", model: s.model || "mock",
+        backend: s.backend || "", markets: s.markets || state.markets,
+        loop_seconds: s.loop_seconds ?? state.loop_seconds, min_confidence: s.min_confidence ?? 0.58,
+        max_position_usd: s.max_position_usd ?? state.max_position_usd,
+        tickers: s.tickers || state.tickers, account: s.account || state.account,
+        cycles: s.cycles || state.cycles, equity_curve: s.equity_curve || state.equity_curve,
+        stats: s.stats || state.stats, best_round: s.best_round, worst_round: s.worst_round,
+        orders: s.orders || state.orders,
+        decisions: s.decisions || state.decisions,
+      });
+      state.lastBySymbol = {};
+      for (const d of state.decisions) if (d.symbol) state.lastBySymbol[d.symbol] = d;
+      renderAll();
     }
+
     function onEvent(ev, data) {
-      if (ev === "snapshot") applySnapshot(data);
-      if (ev === "ticker") { state.tickers[data.symbol] = data; renderTickers(); }
-      if (ev === "account") { state.account = data; renderAccount(); }
-      if (ev === "decision") {
-        data.ts_ms = data.ts_ms || Date.now();
-        state.decisions.push(data);
-        renderDecisions();
-      }
-      if (ev === "skip") {
-        data.ts_ms = data.ts_ms || Date.now();
-        state.decisions.push(data);
-        renderDecisions();
-      }
-      if (ev === "order" || ev === "fill") {
-        state.orders.push(data);
-        renderTickets();
-      }
-      if (ev === "status") {
-        state.running = !!data.running;
-        $("runPill").textContent = state.running ? "运行中" : "已停止";
-        $("runPill").className = "pill" + (state.running ? " on" : "");
+      setText("lastEvt", hms(data.ts_ms));
+      switch (ev) {
+        case "snapshot": applySnapshot(data); break;
+        case "ticker":
+          state.tickers[data.symbol] = data; renderPrice(data.symbol); break;
+        case "account":
+          state.account = data; renderKpis(); renderBook(); break;
+        case "status":
+          state.running = !!data.running; renderStatus(); break;
+        case "decision": {
+          state.decisions.push(data);
+          if (state.decisions.length > KEEP_DECISIONS) state.decisions = state.decisions.slice(-KEEP_DECISIONS);
+          if (data.symbol) state.lastBySymbol[data.symbol] = data;
+          const st = state.stats || (state.stats = {});
+          if (!data.error) {
+            const a = (data.action || "").toLowerCase();
+            if (a === "buy") st.n_buy = (st.n_buy || 0) + 1;
+            else if (a === "sell") st.n_sell = (st.n_sell || 0) + 1;
+            st.n_decisions = (st.n_buy || 0) + (st.n_sell || 0);
+          }
+          if (data.outcome === "trade") st.n_orders = (st.n_orders || 0) + 1;
+          renderNow(); renderFeed(true); renderNative(); renderKpis(); flashNowRow(data.symbol);
+          break;
+        }
+        case "order": case "fill":
+          state.orders.push(data); break;
+        case "cycle":
+          state.cycles.push(data);
+          if (state.cycles.length > 400) state.cycles = state.cycles.slice(-400);
+          if (data.account) state.account = data.account;
+          renderKpis(); renderWall(); renderBook();
+          resync();   // pulls equity curve point, best/worst round, server-side stats
+          break;
+        case "error":
+          break;
       }
     }
-    async function post(url) {
-      const r = await fetch(url, { method: "POST" });
-      return r.json();
+
+    async function resync() {
+      try { applySnapshot(await (await fetch("/api/state")).json()); } catch {}
     }
-    $("startBtn").onclick = () => post("/api/start");
-    $("stopBtn").onclick = () => post("/api/stop");
-    $("onceBtn").onclick = async () => {
-      $("onceBtn").disabled = true;
-      try { await post("/api/tick"); }
-      finally { $("onceBtn").disabled = false; }
-    };
+
+    /* ---------- SSE ---------- */
+    function setConn(ok, text) {
+      const c = $("conn");
+      c.classList.toggle("ok", ok === true);
+      c.classList.toggle("bad", ok === false);
+      setText("connText", text);
+    }
     function connect() {
       const es = new EventSource("/api/events");
-      ["snapshot","ticker","decision","skip","order","fill","account","status","error"].forEach(name => {
-        es.addEventListener(name, (e) => {
-          try { onEvent(name, JSON.parse(e.data)); } catch {}
-        });
+      es.onopen = () => {
+        setConn(true, "已连接");
+        if (connectedOnce) resync();   // reconnect → catch up on missed events
+        connectedOnce = true;
+      };
+      es.onerror = () => setConn(false, "断开，重连中…");
+      ["snapshot", "ticker", "decision", "order", "fill", "account", "status", "error", "cycle"].forEach(name => {
+        es.addEventListener(name, (e) => { try { onEvent(name, JSON.parse(e.data)); } catch {} });
       });
-      es.onerror = () => {};
     }
     async function boot() {
-      try {
-        const s = await (await fetch("/api/state")).json();
-        applySnapshot(s);
-      } catch {}
+      await resync();
       connect();
     }
-    setInterval(() => { $("clock").textContent = new Date().toLocaleString("zh-CN", { hour12: false }); }, 1000);
+
+    /* per-second: clock + elapsed only (no full re-render) */
+    setInterval(() => {
+      setText("clock", hms());
+      if (state.running && state.stats && state.stats.elapsed_s != null) {
+        state.stats.elapsed_s += 1;
+        renderElapsed();
+      }
+    }, 1000);
+
+    setText("clock", hms());
     boot();
   </script>
 </body>

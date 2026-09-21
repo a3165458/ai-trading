@@ -31,24 +31,24 @@ cp .env.example .env
 python -m app
 ```
 
-打开 http://127.0.0.1:3000
+打开 http://127.0.0.1:3000（本机 3000 被占用时改 `PORT`）。进程启动后自动连续决策，界面只做展示。
 
-- **跑一轮**：BTC、ETH 各决策一次
-- **启动**：按 `LOOP_SECONDS` 循环
-- 未配 `OPENAI_BASE_URL` 时用内置 mock（动量 + 盘口不平衡）
+`MODEL=mock` 或未配决策后端时用内置 mock（动量 + 盘口不平衡）。
 
-## 接 this-that / Jev（OpenAI 兼容）
+## 接 this-that / Jev
 
-你把模型包成 OpenAI Chat Completions。this-that 官方 server：
+`MODEL` 可选 `auto` / `thisthat` / `jev` / `mock`。`auto`：有 `JEV_API_KEY` 走官方 Jev，有 `OPENAI_BASE_URL` 走本地 this-that，否则 mock。
+
+### 本地 this-that-model（当前默认）
 
 ```bash
-pip install "thisthat @ git+https://github.com/FLock-io/this-that-model"
 python -m thisthat.server --port 8000
 ```
 
 `.env`：
 
 ```
+MODEL=thisthat
 OPENAI_BASE_URL=http://127.0.0.1:8000/v1
 OPENAI_API_KEY=not-needed
 OPENAI_MODEL=flock-io/this-that-model-1.0
@@ -58,12 +58,25 @@ OPENAI_MODEL=flock-io/this-that-model-1.0
 
 - 倒数第二条 user message = 市场状态
 - 最后一条 user message = 问题
-- `response_format.json_schema.schema.properties.answer.enum = ["buy","sell","hold"]`
+- `response_format.json_schema.schema.properties.answer.enum = ["buy","sell"]`
 - `logprobs=true` 读分布；若响应带 `this_that` 字段也会用
+
+### 官方 Jev（TypeSafe）
+
+需要 `JEV_API_KEY`（也认 `TYPESAFE_API_KEY` / `TYPESAFE_AI_API_KEY`）：
+
+```
+MODEL=jev
+JEV_API_URL=https://api.typesafe.ai/v1/systemone
+JEV_API_KEY=jv_live_...
+JEV_MODEL=jev-1.13.0
+```
+
+走 `POST /v1/systemone`，`choice` 问题的 options 是 buy / sell。
 
 ## Lighter 实盘
 
-纸上模式不需要 API key。实盘：
+进程启动即连续下单。需要：
 
 1. `pip install lighter-sdk`
 2. 在 [app.lighter.xyz](https://app.lighter.xyz) 创建 API key（index 2–254，0/1 留给官方 UI）
@@ -75,6 +88,8 @@ LIGHTER_BASE_URL=https://mainnet.zklighter.elliot.ai
 LIGHTER_API_PRIVATE_KEY=...
 LIGHTER_ACCOUNT_INDEX=...
 LIGHTER_API_KEY_INDEX=2
+LOOP_SECONDS=0
+COOLDOWN_SECONDS=0
 ```
 
 测试网把 URL 换成 `https://testnet.zklighter.elliot.ai`。
@@ -83,9 +98,10 @@ LIGHTER_API_KEY_INDEX=2
 
 ## 风控（代码，不是模型）
 
-- `MIN_CONFIDENCE` 以下 → hold，不下单
-- `MAX_POSITION_USD` 限制同向加仓
-- `COOLDOWN_SECONDS` 每市场冷却
+- `MIN_CONFIDENCE` 以下 → 跳过本轮，不下单
+- `MAX_POSITION_USD` 限制同向加仓（`0` 或不设 = 不限）
+- `COOLDOWN_SECONDS` 每市场冷却（`0` = 不冷却）
+- `LOOP_SECONDS` 两轮之间的最短间隔（`0` = 连续跑，只让出 50ms）
 - `TRADE_NOTIONAL_USD` 单笔名义（且满足交易所 `min_base` / `min_quote`）
 
 这不是投资建议。实盘会亏钱。

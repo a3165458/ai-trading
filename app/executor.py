@@ -5,6 +5,8 @@ import time
 import uuid
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal
 
+from typing import Any
+
 from app.config import Settings
 from app.types import Action, MarketMeta, OrderIntent, OrderResult, Position, Snapshot
 
@@ -34,6 +36,26 @@ def size_for_notional(notional: float, mid: float, meta: MarketMeta) -> float:
         if size < meta.min_base:
             size = meta.min_base
     return size
+
+
+def _num(v: Any) -> float | None:
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pick_account(body: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(body, dict):
+        return None
+    accounts = body.get("accounts")
+    if isinstance(accounts, list) and accounts and isinstance(accounts[0], dict):
+        return accounts[0]
+    if "collateral" in body or "positions" in body or "available_balance" in body:
+        return body
+    return None
 
 
 def apply_fill(pos: Position, action: Action, qty: float, price: float) -> float:
@@ -73,6 +95,7 @@ class PaperAccount:
         self.start_equity = equity
         self.positions = {s: Position(s) for s in symbols}
         self.marks: dict[str, float] = {}
+        self._start_locked = False
 
     def mark(self, symbol: str, mid: float) -> None:
         self.marks[symbol] = mid
@@ -106,8 +129,46 @@ class PaperAccount:
             "cash": round(self.cash, 4),
             "start_equity": self.start_equity,
             "pnl_usd": round(self.equity() - self.start_equity, 4),
+            "pnl_pct": round((self.equity() / self.start_equity - 1) * 100, 4) if self.start_equity else 0.0,
             "positions": [self.position_view(s) for s in self.positions],
         }
+
+    def apply_exchange(self, body: dict[str, Any]) -> None:
+        acct = _pick_account(body)
+        if not acct:
+            return
+        cash = _num(acct.get("available_balance") or acct.get("collateral"))
+        if cash is not None:
+            self.cash = cash
+        seen: set[str] = set()
+        for row in acct.get("positions") or []:
+            if not isinstance(row, dict):
+                continue
+            sym = str(row.get("symbol") or "").upper()
+            if sym not in self.positions:
+                continue
+            seen.add(sym)
+            qty = abs(_num(row.get("position")) or 0.0)
+            sign = int(row.get("sign") or 0)
+            if sign == 0 and qty:
+                sign = 1
+            size = qty * (1 if sign >= 0 else -1)
+            entry = _num(row.get("avg_entry_price")) or 0.0
+            realized = _num(row.get("realized_pnl")) or 0.0
+            p = self.positions[sym]
+            p.size = size if qty else 0.0
+            p.entry = entry if p.size else 0.0
+            p.realized = realized
+            mid = _num(row.get("mark_price"))
+            if mid:
+                self.marks[sym] = mid
+        for sym, p in self.positions.items():
+            if sym not in seen:
+                p.size = 0.0
+                p.entry = 0.0
+        if not self._start_locked:
+            self.start_equity = self.equity()
+            self._start_locked = True
 
 
 class PaperExecutor:
@@ -124,7 +185,6 @@ class PaperExecutor:
         pos = self.account.positions[intent.symbol]
         pnl = apply_fill(pos, intent.action, intent.size, intent.price)
         self.account.cash += pnl
-        self.account.mark(intent.symbol, intent.price)
         return OrderResult(
             id=uuid.uuid4().hex[:12],
             symbol=intent.symbol,
@@ -145,8 +205,10 @@ class PaperExecutor:
 class LiveExecutor:
     mode = "live"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, account: PaperAccount, refresh=None):
         self.settings = settings
+        self.account = account
+        self._refresh = refresh
         self._client = None
         self._ids = itertools.count(int(time.time() * 1000) % 1_000_000_000)
 
@@ -205,6 +267,15 @@ class LiveExecutor:
             hash_s = None
             if tx_hash is not None:
                 hash_s = getattr(tx_hash, "tx_hash", None) or str(tx_hash)
+            pos = self.account.positions.get(intent.symbol)
+            if pos is not None:
+                pnl = apply_fill(pos, intent.action, intent.size, intent.price)
+                self.account.cash += pnl
+            if self._refresh:
+                try:
+                    await self._refresh()
+                except Exception:
+                    pass
             return OrderResult(
                 id=str(oid),
                 symbol=intent.symbol,
@@ -215,7 +286,7 @@ class LiveExecutor:
                 mode="live",
                 tx_hash=hash_s,
                 ts_ms=ts,
-                filled=False,
+                filled=True,
                 reduce_only=intent.reduce_only,
                 confidence=intent.confidence,
                 probabilities=intent.probabilities,
@@ -240,23 +311,23 @@ class LiveExecutor:
 
 
 
-def build_executor(settings: Settings, account: PaperAccount):
+def build_executor(settings: Settings, account: PaperAccount, refresh=None):
     if settings.live:
-        return LiveExecutor(settings)
+        return LiveExecutor(settings, account, refresh=refresh)
     return PaperExecutor(account)
 
 
 def decide_intent(
     snapshot: Snapshot,
-    action: Action,
+    action: str,
     confidence: float,
     probabilities: dict[str, float],
     pos: Position,
     settings: Settings,
     last_trade_at: float,
 ) -> tuple[OrderIntent | None, str]:
-    if action == "hold":
-        return None, "model_hold"
+    if action not in ("buy", "sell"):
+        return None, "unknown_action"
     if confidence < settings.min_confidence:
         return None, f"low_confidence {confidence:.3f} < {settings.min_confidence}"
     now = time.time()
@@ -273,7 +344,8 @@ def decide_intent(
         signed_want = want if action == "buy" else -want
         reducing = True
     new_size = pos.size + signed_want
-    if abs(new_size) * mid > settings.max_position_usd + 1e-9:
+    cap = settings.position_cap
+    if cap is not None and abs(new_size) * mid > cap + 1e-9:
         if reducing:
             want = min(want, abs(pos.size))
             if want <= 0:

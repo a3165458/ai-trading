@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-Action = Literal["buy", "sell", "hold"]
+Action = Literal["buy", "sell"]
 
 
 def to_dict(obj: Any) -> Any:
@@ -97,6 +97,11 @@ class Decision:
     source: str
     raw: str = ""
     error: str | None = None
+    prompt: str = ""
+    question: str = ""
+    content: str = ""
+    this_that: dict[str, Any] | None = None
+    logprobs: list[dict[str, Any]] = field(default_factory=list)
 
     def as_public(self) -> dict[str, Any]:
         return {
@@ -106,6 +111,12 @@ class Decision:
             "latency_ms": round(self.latency_ms, 2),
             "source": self.source,
             "error": self.error,
+            "prompt": self.prompt,
+            "question": self.question,
+            "content": self.content,
+            "this_that": self.this_that,
+            "logprobs": self.logprobs,
+            "raw": (self.raw or self.content)[:4000],
         }
 
 

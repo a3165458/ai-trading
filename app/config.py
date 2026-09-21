@@ -53,24 +53,46 @@ class Settings:
     lighter_account_index: int | None
     lighter_api_key_index: int
     markets: list[str] = field(default_factory=list)
-    loop_seconds: float = 20.0
+    loop_seconds: float = 0.0
     trade_notional_usd: float = 25.0
     min_confidence: float = 0.58
-    max_position_usd: float = 200.0
+    max_position_usd: float | None = None
     slippage: float = 0.005
     paper_equity_usd: float = 10_000.0
-    cooldown_seconds: float = 30.0
+    cooldown_seconds: float = 0.0
     allow_flip: bool = True
     host: str = "0.0.0.0"
     port: int = 3000
+    model_backend: str = "auto"
+    jev_api_url: str = "https://api.typesafe.ai/v1/systemone"
+    jev_api_key: str = ""
+    jev_model: str = "jev-1.13.0"
 
     @property
     def live(self) -> bool:
         return self.trading_mode == "live"
 
     @property
+    def resolved_backend(self) -> str:
+        requested = (self.model_backend or "auto").lower()
+        if requested in ("thisthat", "jev", "mock"):
+            return requested
+        if self.jev_api_key:
+            return "jev"
+        if self.openai_base_url:
+            return "thisthat"
+        return "mock"
+
+    @property
     def use_remote_model(self) -> bool:
-        return bool(self.openai_base_url)
+        return self.resolved_backend in ("thisthat", "jev")
+
+    @property
+    def position_cap(self) -> float | None:
+        cap = self.max_position_usd
+        if cap is None or cap <= 0:
+            return None
+        return cap
 
 
 def load_settings() -> Settings:
@@ -83,6 +105,10 @@ def load_settings() -> Settings:
         if m not in ("BTC", "ETH"):
             raise ValueError(f"unsupported market {m}; only BTC and ETH")
     acct = _s("LIGHTER_ACCOUNT_INDEX")
+    backend = _s("MODEL", "auto").lower()
+    if backend not in ("auto", "thisthat", "jev", "mock"):
+        raise ValueError("MODEL must be auto, thisthat, jev, or mock")
+    jev_key = _s("JEV_API_KEY") or _s("TYPESAFE_API_KEY") or _s("TYPESAFE_AI_API_KEY")
     settings = Settings(
         openai_base_url=_s("OPENAI_BASE_URL"),
         openai_api_key=_s("OPENAI_API_KEY"),
@@ -93,17 +119,26 @@ def load_settings() -> Settings:
         lighter_account_index=int(acct) if acct else None,
         lighter_api_key_index=_i("LIGHTER_API_KEY_INDEX", 2),
         markets=markets or ["BTC", "ETH"],
-        loop_seconds=_f("LOOP_SECONDS", 20.0),
+        loop_seconds=_f("LOOP_SECONDS", 0.0),
         trade_notional_usd=_f("TRADE_NOTIONAL_USD", 25.0),
         min_confidence=_f("MIN_CONFIDENCE", 0.58),
-        max_position_usd=_f("MAX_POSITION_USD", 200.0),
+        max_position_usd=_f("MAX_POSITION_USD", 0.0) or None,
         slippage=_f("SLIPPAGE", 0.005),
         paper_equity_usd=_f("PAPER_EQUITY_USD", 10_000.0),
-        cooldown_seconds=_f("COOLDOWN_SECONDS", 30.0),
+        cooldown_seconds=_f("COOLDOWN_SECONDS", 0.0),
         allow_flip=_b("ALLOW_FLIP", True),
         host=_s("HOST", "0.0.0.0"),
         port=_i("PORT", 3000),
+        model_backend=backend,
+        jev_api_url=_s("JEV_API_URL", "https://api.typesafe.ai/v1/systemone").rstrip("/"),
+        jev_api_key=jev_key,
+        jev_model=_s("JEV_MODEL", "jev-1.13.0"),
     )
+    resolved = settings.resolved_backend
+    if resolved == "thisthat" and not settings.openai_base_url:
+        raise ValueError("MODEL=thisthat requires OPENAI_BASE_URL")
+    if resolved == "jev" and not settings.jev_api_key:
+        raise ValueError("MODEL=jev requires JEV_API_KEY (or TYPESAFE_API_KEY)")
     if settings.live:
         missing = []
         if not settings.lighter_api_private_key:

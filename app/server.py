@@ -29,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        engine.start()
         yield
         await engine.close()
 
@@ -53,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "ok": True,
             "mode": settings.trading_mode,
             "model": model.name,
+            "backend": settings.resolved_backend,
             "lighter": settings.lighter_base_url,
         }
 

@@ -4,8 +4,8 @@ import math
 import unittest
 
 from app.config import Settings
-from app.executor import apply_fill, decide_intent, size_for_notional, to_int
-from app.model import parse_decision
+from app.executor import PaperAccount, apply_fill, decide_intent, size_for_notional, to_int
+from app.model import parse_decision, parse_jev_decision
 from app.types import MarketMeta, Position, Snapshot, BookLevel
 
 
@@ -20,13 +20,13 @@ def settings(**kw) -> Settings:
         lighter_account_index=None,
         lighter_api_key_index=2,
         markets=["BTC"],
-        loop_seconds=20,
+        loop_seconds=0,
         trade_notional_usd=25,
         min_confidence=0.58,
-        max_position_usd=200,
+        max_position_usd=None,
         slippage=0.005,
         paper_equity_usd=10_000,
-        cooldown_seconds=30,
+        cooldown_seconds=0,
         allow_flip=True,
         host="127.0.0.1",
         port=3000,
@@ -80,6 +80,13 @@ class AccountingTests(unittest.TestCase):
         self.assertEqual(p.size, -2)
         self.assertEqual(p.entry, 40)
 
+    def test_mark_to_market_moves_equity(self):
+        a = PaperAccount(10_000, ["BTC"])
+        apply_fill(a.positions["BTC"], "sell", 1, 100)
+        a.mark("BTC", 101)
+        self.assertAlmostEqual(a.equity(), 9_999.0)
+        self.assertAlmostEqual(a.as_public()["pnl_usd"], -1.0)
+
     def test_to_int_price(self):
         self.assertEqual(to_int(81432.7, 1), 814327)
         self.assertEqual(to_int(3890.12, 2), 389012)
@@ -94,12 +101,42 @@ class AccountingTests(unittest.TestCase):
 class ParseTests(unittest.TestCase):
     def test_this_that_extension(self):
         d = parse_decision(
-            {"this_that": {"choice": "sell", "probabilities": {"buy": 0.2, "sell": 0.7, "hold": 0.1}, "confidence": 0.7}},
+            {"this_that": {"choice": "sell", "probabilities": {"buy": 0.2, "sell": 0.8}, "confidence": 0.8}},
             12,
             "openai",
         )
         self.assertEqual(d.action, "sell")
-        self.assertAlmostEqual(d.probabilities["sell"], 0.7)
+        self.assertAlmostEqual(d.probabilities["sell"], 0.8)
+        self.assertEqual(d.this_that["choice"], "sell")
+
+    def test_native_logprobs_kept(self):
+        d = parse_decision(
+            {
+                "choices": [{
+                    "message": {"content": '{"answer": "sell"}'},
+                    "logprobs": {"content": [{
+                        "token": "sell",
+                        "logprob": math.log(0.8),
+                        "top_logprobs": [
+                            {"token": "sell", "logprob": math.log(0.8)},
+                            {"token": "buy", "logprob": math.log(0.2)},
+                        ],
+                    }]},
+                }],
+                "this_that": {"choice": "sell", "probabilities": {"buy": 0.2, "sell": 0.8}, "confidence": 0.8},
+            },
+            9,
+            "thisthat",
+            prompt="market: BTC-USD",
+        )
+        self.assertEqual(d.action, "sell")
+        self.assertEqual(d.prompt, "market: BTC-USD")
+        self.assertEqual(d.content, '{"answer": "sell"}')
+        self.assertEqual(d.logprobs[0]["token"], "sell")
+        self.assertAlmostEqual(d.logprobs[0]["top"][1]["p"], 0.2, places=5)
+        pub = d.as_public()
+        self.assertIn("this_that", pub)
+        self.assertEqual(pub["question"], "Should the execution system buy or sell this perpetual now?")
 
     def test_json_content(self):
         d = parse_decision(
@@ -114,14 +151,13 @@ class ParseTests(unittest.TestCase):
         d = parse_decision(
             {
                 "choices": [{
-                    "message": {"content": '{"answer": "hold"}'},
+                    "message": {"content": '{"answer": "buy"}'},
                     "logprobs": {"content": [{
-                        "token": "hold",
-                        "logprob": math.log(0.6),
+                        "token": "buy",
+                        "logprob": math.log(0.7),
                         "top_logprobs": [
-                            {"token": "hold", "logprob": math.log(0.6)},
-                            {"token": "buy", "logprob": math.log(0.3)},
-                            {"token": "sell", "logprob": math.log(0.1)},
+                            {"token": "buy", "logprob": math.log(0.7)},
+                            {"token": "sell", "logprob": math.log(0.3)},
                         ],
                     }]},
                 }]
@@ -129,20 +165,66 @@ class ParseTests(unittest.TestCase):
             3,
             "openai",
         )
-        self.assertEqual(d.action, "hold")
-        self.assertAlmostEqual(d.probabilities["buy"], 0.3, places=5)
+        self.assertEqual(d.action, "buy")
+        self.assertAlmostEqual(d.probabilities["buy"], 0.7, places=5)
+        self.assertAlmostEqual(d.probabilities["sell"], 0.3, places=5)
+        self.assertNotIn("hold", d.probabilities)
+
+    def test_jev_choice(self):
+        d = parse_jev_decision(
+            {
+                "model": "jev-1.13.0",
+                "answers": {
+                    "action": {
+                        "type": "choice",
+                        "choice": "buy",
+                        "probabilities": {"buy": 0.72, "sell": 0.28},
+                        "confidence": 0.72,
+                    }
+                },
+            },
+            40,
+        )
+        self.assertEqual(d.action, "buy")
+        self.assertEqual(d.source, "jev")
+        self.assertAlmostEqual(d.probabilities["sell"], 0.28)
+        self.assertNotIn("hold", d.probabilities)
+
+
+    def test_legacy_hold_remaps_to_buy_sell(self):
+        d = parse_decision(
+            {
+                "this_that": {
+                    "choice": "hold",
+                    "probabilities": {"buy": 0.4, "sell": 0.1, "hold": 0.5},
+                    "confidence": 0.5,
+                }
+            },
+            1,
+            "openai",
+        )
+        self.assertEqual(d.action, "buy")
+        self.assertAlmostEqual(d.probabilities["buy"], 0.8)
+        self.assertNotIn("hold", d.probabilities)
 
 
 class PolicyTests(unittest.TestCase):
-    def test_hold_skips(self):
-        intent, reason = decide_intent(snap(), "hold", 0.9, {"hold": 1}, Position("BTC"), settings(), 0)
+    def test_unknown_action_skips(self):
+        intent, reason = decide_intent(snap(), "hold", 0.9, {"buy": 0.5, "sell": 0.5}, Position("BTC"), settings(), 0)
         self.assertIsNone(intent)
-        self.assertEqual(reason, "model_hold")
+        self.assertEqual(reason, "unknown_action")
 
     def test_low_confidence(self):
         intent, reason = decide_intent(snap(), "buy", 0.4, {"buy": 0.4}, Position("BTC"), settings(), 0)
         self.assertIsNone(intent)
         self.assertIn("low_confidence", reason)
+
+    def test_unlimited_position_allows_add(self):
+        p = Position("BTC", size=0.003, entry=100)
+        s = settings(max_position_usd=None, trade_notional_usd=25, cooldown_seconds=0)
+        intent, reason = decide_intent(snap(mid=100), "buy", 0.9, {"buy": 0.9}, p, s, 0)
+        self.assertEqual(reason, "ok")
+        self.assertIsNotNone(intent)
 
     def test_max_position_blocks_add(self):
         p = Position("BTC", size=0.003, entry=100)
@@ -152,10 +234,37 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(reason, "max_position")
 
     def test_buy_intent(self):
-        intent, reason = decide_intent(snap(mid=100), "buy", 0.8, {"buy": 0.8, "sell": 0.1, "hold": 0.1}, Position("BTC"), settings(cooldown_seconds=0), 0)
+        intent, reason = decide_intent(snap(mid=100), "buy", 0.8, {"buy": 0.8, "sell": 0.2}, Position("BTC"), settings(cooldown_seconds=0), 0)
         self.assertEqual(reason, "ok")
         self.assertEqual(intent.action, "buy")
         self.assertGreater(intent.size, 0)
+
+
+class ExchangeAccountTests(unittest.TestCase):
+    def test_apply_exchange_short(self):
+        a = PaperAccount(10_000, ["BTC", "ETH"])
+        a.apply_exchange({
+            "accounts": [{
+                "collateral": "9500",
+                "available_balance": "9500",
+                "positions": [
+                    {
+                        "symbol": "BTC",
+                        "sign": -1,
+                        "position": "0.01",
+                        "avg_entry_price": "80000",
+                        "realized_pnl": "12.5",
+                    }
+                ],
+            }]
+        })
+        a.mark("BTC", 81000)
+        self.assertEqual(a.positions["BTC"].side(), "short")
+        self.assertAlmostEqual(a.positions["BTC"].size, -0.01)
+        self.assertAlmostEqual(a.positions["BTC"].entry, 80000)
+        self.assertAlmostEqual(a.cash, 9500)
+        self.assertAlmostEqual(a.equity(), 9500 + (-0.01) * (81000 - 80000))
+        self.assertEqual(a.positions["ETH"].size, 0)
 
 
 if __name__ == "__main__":
