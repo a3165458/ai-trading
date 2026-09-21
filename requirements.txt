@@ -1,0 +1,5 @@
+fastapi>=0.115.0
+uvicorn>=0.34.0
+httpx>=0.28.0
+# Live Lighter orders (paper mode does not need this):
+# lighter-sdk>=1.0.0

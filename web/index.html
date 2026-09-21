@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JEV × Lighter</title>
+  <style>
+    :root {
+      --bg: #07080a;
+      --panel: #101216;
+      --panel-2: #161a20;
+      --line: #2a3038;
+      --buy: #19e38a;
+      --buy-ink: #04150c;
+      --sell: #ff3b5c;
+      --sell-ink: #1a0308;
+      --hold: #8b93a7;
+      --text: #e7eadf;
+      --muted: #8b93a7;
+      --warn: #f5c542;
+    }
+    .muted { color: var(--muted); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
+    button, input { font: inherit; }
+    code, .mono, .num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    header {
+      display: flex; align-items: center; gap: 16px; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+      background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); z-index: 2;
+    }
+    .brand { display: flex; flex-direction: column; gap: 2px; }
+    .brand strong { letter-spacing: 0.12em; font-size: 13px; }
+    .brand span { color: var(--muted); font-size: 12px; }
+    .pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pill {
+      border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; font-size: 12px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .pill.paper { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+    .pill.live { color: var(--sell); border-color: color-mix(in srgb, var(--sell) 50%, var(--line)); }
+    .pill.on { color: var(--buy); }
+    .actions { display: flex; gap: 8px; }
+    button {
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+      padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    }
+    button:hover { border-color: #4a5360; }
+    button.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+    button.danger { color: var(--sell); border-color: color-mix(in srgb, var(--sell) 40%, var(--line)); }
+    button:focus-visible { outline: 2px solid var(--buy); outline-offset: 2px; }
+    main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 61px); }
+    aside { border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.16em; color: var(--muted); font-weight: 600; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .ticker { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .ticker .sym { font-weight: 700; letter-spacing: 0.08em; }
+    .ticker .px { font-size: 20px; }
+    .up { color: var(--buy); }
+    .down { color: var(--sell); }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .pos-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .pos-row:last-child { border-bottom: 0; }
+    .blotter { padding: 16px 20px 40px; }
+    .blotter-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .tickets { display: flex; flex-direction: column; gap: 10px; }
+    .ticket {
+      display: grid; grid-template-columns: 108px 1fr; min-height: 88px;
+      border: 1px solid var(--line); background: var(--panel); overflow: hidden;
+    }
+    .ticket .stub {
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; letter-spacing: 0.18em; font-size: 22px;
+    }
+    .ticket.buy .stub { background: var(--buy); color: var(--buy-ink); }
+    .ticket.sell .stub { background: var(--sell); color: var(--sell-ink); }
+    .ticket .body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 12px; }
+    .ticket .k { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .ticket .v { font-size: 15px; }
+    .empty { color: var(--muted); padding: 24px; border: 1px dashed var(--line); }
+    .decisions { margin-top: 28px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; }
+    .tag { display: inline-block; min-width: 48px; text-align: center; padding: 2px 8px; font-weight: 700; letter-spacing: 0.08em; }
+    .tag.buy { background: var(--buy); color: var(--buy-ink); }
+    .tag.sell { background: var(--sell); color: var(--sell-ink); }
+    .tag.hold { background: var(--panel-2); color: var(--hold); }
+    .bars { display: flex; height: 6px; background: var(--panel-2); overflow: hidden; }
+    .bars i { display: block; height: 100%; }
+    .bars .b { background: var(--buy); }
+    .bars .s { background: var(--sell); }
+    .bars .h { background: var(--hold); }
+    .err { color: var(--sell); font-size: 12px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .ticket { grid-template-columns: 72px 1fr; }
+      .ticket .stub { font-size: 14px; letter-spacing: 0.08em; }
+      .ticket .body { grid-template-columns: 1fr 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <strong>JEV × LIGHTER</strong>
+      <span>this-that 决策 · BTC / ETH 永续</span>
+    </div>
+    <div class="pills">
+      <span id="modePill" class="pill paper">PAPER</span>
+      <span id="runPill" class="pill">已停止</span>
+      <span id="modelPill" class="pill">mock</span>
+    </div>
+    <div class="actions">
+      <button id="onceBtn" type="button">跑一轮</button>
+      <button id="startBtn" class="primary" type="button">启动</button>
+      <button id="stopBtn" class="danger" type="button">停止</button>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <section>
+        <h2>行情</h2>
+        <div id="tickers"></div>
+      </section>
+      <section>
+        <h2>账户</h2>
+        <div class="card" id="account"></div>
+      </section>
+      <section>
+        <h2>说明</h2>
+        <div class="card" style="color:var(--muted);font-size:12px">
+          默认纸上交易，用 Lighter 真实盘口。模型返回 buy / sell / hold；只有置信度过线才会下单。实盘需 <code>TRADING_MODE=live</code>。
+        </div>
+      </section>
+    </aside>
+    <section class="blotter">
+      <div class="blotter-head">
+        <h2>下单动作 · BUY / SELL</h2>
+        <span class="mono" id="clock"></span>
+      </div>
+      <div id="tickets" class="tickets"></div>
+      <div class="decisions">
+        <h2>决策记录</h2>
+        <table>
+          <thead>
+            <tr><th>时间</th><th>市场</th><th>动作</th><th>置信</th><th>分布</th><th>备注</th></tr>
+          </thead>
+          <tbody id="decisions"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = { orders: [], decisions: [], tickers: {}, account: null, running: false, mode: "paper", model: "mock" };
+
+    function fmt(n, d=2) {
+      if (n === null || n === undefined || Number.isNaN(n)) return "—";
+      return Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    }
+    function pct(n) {
+      if (n === null || n === undefined) return "—";
+      const v = Number(n);
+      const s = (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+      return s;
+    }
+    function ts(ms) {
+      const d = new Date(ms || Date.now());
+      return d.toLocaleTimeString("zh-CN", { hour12: false });
+    }
+    function renderTickers() {
+      const el = $("tickers");
+      const syms = ["BTC", "ETH"];
+      el.innerHTML = syms.map(sym => {
+        const t = state.tickers[sym];
+        if (!t) return `<div class="card"><div class="ticker"><span class="sym">${sym}</span><span class="muted">等待盘口</span></div></div>`;
+        const ch = Number(t.change);
+        const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+        return `<div class="card">
+          <div class="ticker"><span class="sym">${sym}</span><span class="px num ${cls}">${fmt(t.mid, 1)}</span></div>
+          <div class="meta">
+            <span>买 ${fmt(t.bid, 1)}</span><span>卖 ${fmt(t.ask, 1)}</span>
+            <span>点差 ${fmt(t.spread_bps, 2)} bps</span>
+            <span class="${cls}">日变 ${fmt(t.change, 2)}</span>
+            <span>资金费率 ${t.funding == null ? "—" : Number(t.funding).toExponential(2)}</span>
+            <span>1h ${t.ret_1h_bps == null ? "—" : fmt(t.ret_1h_bps, 1) + " bps"}</span>
+          </div>
+        </div>`;
+      }).join("");
+    }
+    function renderAccount() {
+      const a = state.account;
+      if (!a) { $("account").textContent = "—"; return; }
+      const rows = (a.positions || []).map(p => {
+        const cls = p.unrealized_usd > 0 ? "up" : p.unrealized_usd < 0 ? "down" : "";
+        return `<div class="pos-row"><span>${p.symbol} ${p.side}</span><span class="num ${cls}">${fmt(p.size, 5)} · ${fmt(p.unrealized_usd, 2)}</span></div>`;
+      }).join("");
+      const pnlCls = a.pnl_usd > 0 ? "up" : a.pnl_usd < 0 ? "down" : "";
+      $("account").innerHTML = `<div>权益 <span class="num">${fmt(a.equity, 2)}</span></div>
+        <div>PnL <span class="num ${pnlCls}">${fmt(a.pnl_usd, 2)}</span></div>${rows}`;
+    }
+    function renderTickets() {
+      const orders = state.orders.filter(o => o.action === "buy" || o.action === "sell").slice().reverse();
+      if (!orders.length) {
+        $("tickets").innerHTML = `<div class="empty">还没有下单。点「跑一轮」或「启动」后，买入/卖出会出现在这里。</div>`;
+        return;
+      }
+      $("tickets").innerHTML = orders.map(o => {
+        const side = o.action;
+        const label = side === "buy" ? "BUY" : "SELL";
+        const zh = side === "buy" ? "买入" : "卖出";
+        return `<article class="ticket ${side}" aria-label="${zh} ${o.symbol}">
+          <div class="stub">${label}</div>
+          <div class="body">
+            <div><div class="k">市场</div><div class="v">${o.symbol}</div></div>
+            <div><div class="k">数量</div><div class="v num">${fmt(o.size, 5)}</div></div>
+            <div><div class="k">价格</div><div class="v num">${fmt(o.price, 1)}</div></div>
+            <div><div class="k">状态</div><div class="v">${o.status}${o.mode === "paper" ? " · 纸上" : ""}</div></div>
+            <div><div class="k">置信</div><div class="v num">${fmt((o.confidence || 0) * 100, 1)}%</div></div>
+            <div><div class="k">时间</div><div class="v num">${ts(o.ts_ms)}</div></div>
+            ${o.error ? `<div style="grid-column:1/-1" class="err">${o.error}</div>` : ""}
+            ${o.tx_hash ? `<div style="grid-column:1/-1" class="mono" style="font-size:11px;color:var(--muted)">${o.tx_hash}</div>` : ""}
+          </div>
+        </article>`;
+      }).join("");
+    }
+    function bar(p) {
+      const b = (p.buy || 0) * 100, s = (p.sell || 0) * 100, h = (p.hold || 0) * 100;
+      return `<div class="bars" title="buy ${b.toFixed(0)} / sell ${s.toFixed(0)} / hold ${h.toFixed(0)}"><i class="b" style="width:${b}%"></i><i class="s" style="width:${s}%"></i><i class="h" style="width:${h}%"></i></div>`;
+    }
+    function renderDecisions() {
+      const rows = state.decisions.slice().reverse().slice(0, 40);
+      $("decisions").innerHTML = rows.map(d => {
+        const note = d.error || d.skip || d.source || "";
+        return `<tr>
+          <td class="num">${ts(d.ts_ms)}</td>
+          <td>${d.symbol || ""}</td>
+          <td><span class="tag ${d.action}">${(d.action || "").toUpperCase()}</span></td>
+          <td class="num">${fmt((d.confidence || 0) * 100, 1)}%</td>
+          <td>${bar(d.probabilities || {})}</td>
+          <td class="err" style="color:var(--muted)">${note}</td>
+        </tr>`;
+      }).join("");
+    }
+    function applySnapshot(s) {
+      if (!s) return;
+      state.running = !!s.running;
+      state.mode = s.mode || "paper";
+      state.model = s.model || "mock";
+      state.tickers = s.tickers || state.tickers;
+      state.account = s.account || state.account;
+      if (Array.isArray(s.orders)) state.orders = s.orders;
+      if (Array.isArray(s.decisions)) state.decisions = s.decisions;
+      $("modePill").textContent = state.mode === "live" ? "LIVE" : "PAPER";
+      $("modePill").className = "pill " + (state.mode === "live" ? "live" : "paper");
+      $("runPill").textContent = state.running ? "运行中" : "已停止";
+      $("runPill").className = "pill" + (state.running ? " on" : "");
+      $("modelPill").textContent = state.model;
+      renderTickers(); renderAccount(); renderTickets(); renderDecisions();
+    }
+    function onEvent(ev, data) {
+      if (ev === "snapshot") applySnapshot(data);
+      if (ev === "ticker") { state.tickers[data.symbol] = data; renderTickers(); }
+      if (ev === "account") { state.account = data; renderAccount(); }
+      if (ev === "decision") {
+        data.ts_ms = data.ts_ms || Date.now();
+        state.decisions.push(data);
+        renderDecisions();
+      }
+      if (ev === "skip") {
+        data.ts_ms = data.ts_ms || Date.now();
+        state.decisions.push(data);
+        renderDecisions();
+      }
+      if (ev === "order" || ev === "fill") {
+        state.orders.push(data);
+        renderTickets();
+      }
+      if (ev === "status") {
+        state.running = !!data.running;
+        $("runPill").textContent = state.running ? "运行中" : "已停止";
+        $("runPill").className = "pill" + (state.running ? " on" : "");
+      }
+    }
+    async function post(url) {
+      const r = await fetch(url, { method: "POST" });
+      return r.json();
+    }
+    $("startBtn").onclick = () => post("/api/start");
+    $("stopBtn").onclick = () => post("/api/stop");
+    $("onceBtn").onclick = async () => {
+      $("onceBtn").disabled = true;
+      try { await post("/api/tick"); }
+      finally { $("onceBtn").disabled = false; }
+    };
+    function connect() {
+      const es = new EventSource("/api/events");
+      ["snapshot","ticker","decision","skip","order","fill","account","status","error"].forEach(name => {
+        es.addEventListener(name, (e) => {
+          try { onEvent(name, JSON.parse(e.data)); } catch {}
+        });
+      });
+      es.onerror = () => {};
+    }
+    async function boot() {
+      try {
+        const s = await (await fetch("/api/state")).json();
+        applySnapshot(s);
+      } catch {}
+      connect();
+    }
+    setInterval(() => { $("clock").textContent = new Date().toLocaleString("zh-CN", { hour12: false }); }, 1000);
+    boot();
+  </script>
+</body>
+</html>
