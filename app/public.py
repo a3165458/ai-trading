@@ -27,7 +27,7 @@ def public_payload(obj: Any) -> Any:
             lk = str(k).lower()
             if k in _DROP or lk in _DROP or "private" in lk or lk.endswith("_key"):
                 continue
-            if k == "error" and v:
+            if v and (lk == "error" or (lk == "message" and obj.get("event") == "error")):
                 out[k] = "failed"
                 continue
             out[k] = public_payload(v)

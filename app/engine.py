@@ -3,14 +3,27 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any
 
 from app.config import Settings
+from app.curve import EquityCurve, account_tag, read_store, write_store
 from app.executor import PaperAccount, close_intent, decide_intent
 from app.market import LighterMarket
 from app.model import DecisionModel
-from app.policy import Calibrator, StateContext, build_state, resolve, risk_exit
+from app.policy import SLOW_MIN, Calibrator, StateContext, apply_direction, build_state, direction_parts, risk_exit
 from app.types import OrderResult
+
+KEEP_ORDERS = 100
+ORDER_FIELDS = ("id", "ts_ms", "symbol", "action", "size", "price", "status", "mode", "filled", "reduce_only", "reason", "error")
+
+
+def order_record(o: dict[str, Any]) -> dict[str, Any]:
+    """What the order log keeps: no tx hash, no model output."""
+    rec = {k: o.get(k) for k in ORDER_FIELDS}
+    if rec["error"]:
+        rec["error"] = str(rec["error"])[:200]
+    return rec
 
 
 class Hub:
@@ -54,6 +67,7 @@ class Engine:
         executor,
         account: PaperAccount,
         hub: Hub,
+        store_path: Path | None = None,
     ):
         self.settings = settings
         self.market = market
@@ -66,10 +80,10 @@ class Engine:
         self.tickers: dict[str, dict[str, Any]] = {}
         self.last_decision: dict[str, Any] | None = None
         self.last_trade_at: dict[str, float] = {s: 0.0 for s in settings.markets}
-        self.orders: deque[dict[str, Any]] = deque(maxlen=200)
+        self.orders: deque[dict[str, Any]] = deque(maxlen=KEEP_ORDERS)
         self.decisions: deque[dict[str, Any]] = deque(maxlen=400)
         self.cycles: deque[dict[str, Any]] = deque(maxlen=400)
-        self.equity_curve: deque[dict[str, Any]] = deque(maxlen=800)
+        self.curve = EquityCurve(step_ms=max(1000, int(settings.loop_seconds * 1000)))
         self.bh_mids: dict[str, float] = {}
         self.created_at = time.time()
         self.loop_started_at: float | None = None
@@ -77,15 +91,65 @@ class Engine:
         self.n_buy = 0
         self.n_sell = 0
         self.n_hold = 0
+        self.n_orders = 0
         self.latencies: deque[float] = deque(maxlen=200)
-        self.best_round: dict[str, Any] | None = None
-        self.worst_round: dict[str, Any] | None = None
         self._lock = asyncio.Lock()
         # symbol -> (side, opened_at). Reset on flat / flip so held_seconds is per position.
         self.opened: dict[str, tuple[str, float]] = {}
+        # symbol -> (size before the last send, unix time the gate expires).
+        # Account sync can lag the fill and otherwise opens the same side twice.
+        self.hold_orders: dict[str, tuple[float, float]] = {}
         self.calibrator = Calibrator(strength=settings.debias_strength if settings.debias else 0.0)
         if hasattr(executor, "_refresh"):
             executor._refresh = self.sync_live_account
+        self.store_path = store_path
+        self._saved_at = 0.0
+        self._seeded_orders = False
+        self._load_store()
+
+    def _store_tag(self) -> str:
+        return account_tag(self.settings.lighter_account_index)
+
+    def _load_store(self) -> None:
+        """Restore the baseline and curve so a restart does not reset cumulative PnL."""
+        if self.store_path is None:
+            return
+        data = read_store(self.store_path)
+        if not data or data.get("account") != self._store_tag():
+            return
+        start = data.get("start_equity")
+        if not isinstance(start, (int, float)) or start <= 0:
+            return
+        self.account.set_baseline(float(start), data.get("start_ts_ms"))
+        self.bh_mids = {
+            str(k): float(v) for k, v in (data.get("bh_mids") or {}).items()
+            if isinstance(v, (int, float)) and v > 0
+        }
+        self.curve.load(data.get("curve") or {})
+        self.orders.extend(
+            order_record(o) for o in data.get("orders") or []
+            if isinstance(o, dict) and isinstance(o.get("ts_ms"), int)
+        )
+
+    def _save_store(self, force: bool = False) -> None:
+        if self.store_path is None or not self.account.synced:
+            return
+        now = time.time()
+        if not force and now - self._saved_at < 10:
+            return
+        self._saved_at = now
+        try:
+            write_store(self.store_path, {
+                "version": 1,
+                "account": self._store_tag(),
+                "start_equity": self.account.start_equity,
+                "start_ts_ms": self.account.start_ts_ms,
+                "bh_mids": self.bh_mids,
+                "curve": self.curve.to_json(),
+                "orders": list(self.orders),
+            })
+        except OSError as e:
+            self.hub.emit("error", {"message": f"store {e}"})
 
     def _buy_hold_equity(self) -> float | None:
         if not self.settings.markets:
@@ -109,7 +173,7 @@ class Engine:
             "n_buy": self.n_buy,
             "n_sell": self.n_sell,
             "n_hold": self.n_hold,
-            "n_orders": len(self.orders),
+            "n_orders": self.n_orders,
             "buy_rate": (self.n_buy / n) if n else 0.0,
             "sell_rate": (self.n_sell / n) if n else 0.0,
             "hold_rate": (self.n_hold / n) if n else 0.0,
@@ -138,18 +202,23 @@ class Engine:
                 "take_profit_bps": self.settings.take_profit_bps,
                 "max_hold_seconds": self.settings.max_hold_seconds,
                 "debias": self.settings.debias,
+                "dir_min": self.settings.dir_min,
+                "model_veto": self.settings.model_veto,
+                "max_adds": self.settings.max_adds,
+                "add_cooldown_seconds": self.settings.add_cooldown_seconds,
+                "add_min_pnl_bps": self.settings.add_min_pnl_bps,
+                "slow_min": SLOW_MIN,
                 "baseline": {s: self.calibrator.baseline(s) for s in self.settings.markets},
             },
             "account": self.account.as_public(),
             "tickers": self.tickers,
             "last_decision": self.last_decision,
-            "orders": list(self.orders)[-80:],
-            "decisions": list(self.decisions)[-80:],
-            "cycles": list(self.cycles)[-120:],
-            "equity_curve": list(self.equity_curve)[-400:],
+            "orders": list(self.orders),
+            "decisions": list(self.decisions)[-200:],
+            "cycles": list(self.cycles)[-60:],
+            "equity_curve": list(self.curve.points),
+            "curve_rev": self.curve.rev,
             "stats": self.stats(),
-            "best_round": self.best_round,
-            "worst_round": self.worst_round,
         }
 
     def start(self) -> None:
@@ -171,14 +240,24 @@ class Engine:
 
     async def close(self) -> None:
         self.stop()
+        self._save_store(force=True)
         await self.market.close()
         close = getattr(self.model, "close", None)
         if close:
             await close()
         await self.executor.close()
 
+    async def _wait_for_account(self, timeout: float = 30.0) -> None:
+        if not self.settings.live:
+            return
+        deadline = time.time() + timeout
+        while self.running and not self.account.synced and time.time() < deadline:
+            await self.sync_live_account()
+            if not self.account.synced:
+                await asyncio.sleep(0.5)
+
     async def _loop(self) -> None:
-        await self.sync_live_account()
+        await self._wait_for_account()
         while self.running:
             t0 = time.time()
             try:
@@ -203,7 +282,14 @@ class Engine:
             if not data:
                 return
             self.account.apply_exchange(data)
-            self.hub.emit("account", self.account.as_public())
+            if self.account.synced and not self._seeded_orders:
+                # The last fill time of a position found at startup is unknown;
+                # treat it as just traded so a restart does not add immediately.
+                now = time.time()
+                for sym, p in self.account.positions.items():
+                    if abs(p.size) > 1e-12 and not self.last_trade_at.get(sym):
+                        self.last_trade_at[sym] = now
+                self._seeded_orders = True
         except Exception as e:
             self.hub.emit("error", {"message": f"account {e}"})
 
@@ -214,32 +300,38 @@ class Engine:
             for symbol in self.settings.markets:
                 results.append(await self._cycle_symbol(symbol))
             ts_ms = int(time.time() * 1000)
-            equity = self.account.equity()
-            bh = self._buy_hold_equity()
-            prev = self.equity_curve[-1]["equity"] if self.equity_curve else self.account.start_equity
-            delta = equity - prev
-            point = {
-                "ts_ms": ts_ms,
-                "equity": round(equity, 4),
-                "pnl_usd": round(equity - self.account.start_equity, 4),
-                "buy_hold": round(bh, 4) if bh is not None else None,
-            }
-            self.equity_curve.append(point)
             self.n_cycles += 1
-            round_rec = {"ts_ms": ts_ms, "pnl": round(delta, 4), "equity": round(equity, 4)}
-            if self.best_round is None or delta > self.best_round["pnl"]:
-                self.best_round = round_rec
-            if self.worst_round is None or delta < self.worst_round["pnl"]:
-                self.worst_round = round_rec
+            point = None
+            appended = False
+            # Before the first exchange sync the account holds no real balance;
+            # a point then would anchor the chart at zero.
+            if self.account.synced:
+                equity = self.account.equity()
+                bh = self._buy_hold_equity()
+                point = {
+                    "ts_ms": ts_ms,
+                    "equity": round(equity, 4),
+                    "pnl_usd": round(equity - self.account.start_equity, 4),
+                    "buy_hold": round(bh, 4) if bh is not None else None,
+                }
+                appended = self.curve.add(point)
+                self._save_store()
             cycle = {
                 "ts_ms": ts_ms,
-                "results": results,
-                "equity": round(equity, 4),
-                "account": self.account.as_public(),
+                "results": [
+                    {k: r.get(k) for k in ("symbol", "action", "outcome", "reason")}
+                    for r in results
+                ],
             }
             self.cycles.append(cycle)
-            self.hub.emit("cycle", cycle)
-            self.hub.emit("account", self.account.as_public())
+            self.hub.emit("cycle", {
+                **cycle,
+                "account": self.account.as_public(),
+                "stats": self.stats(),
+                "point": point,
+                "curve_append": appended,
+                "curve_rev": self.curve.rev,
+            })
             return {"ok": True, "results": results, "equity": point}
 
     async def _cycle_symbol(self, symbol: str) -> dict[str, Any]:
@@ -249,7 +341,7 @@ class Engine:
             rec = {"symbol": symbol, "error": f"market {e}"}
             self.hub.emit("error", rec)
             return rec
-        self.account.mark(symbol, snap.mid)
+        self.account.mark(symbol, snap.mark_price or snap.mid)
         ticker = {
             "symbol": snap.symbol,
             "market_id": snap.market_id,
@@ -266,12 +358,35 @@ class Engine:
         }
         self.tickers[symbol] = ticker
         self.hub.emit("ticker", ticker)
+        if not self.account.synced:
+            # positions unknown until the exchange answers; trading now could double a position
+            return {"symbol": symbol, "outcome": "skip", "reason": "account_sync"}
         if symbol not in self.bh_mids and snap.mid:
             self.bh_mids[symbol] = snap.mid
 
         pos = self.account.positions[symbol]
         now = time.time()
         held = self._held_seconds(symbol, pos, now)
+        if self._awaiting_fill(symbol, pos.size, now):
+            parts = direction_parts(snap)
+            dpub = {
+                "symbol": symbol,
+                "mid": snap.mid,
+                "ts_ms": int(now * 1000),
+                "action": "hold",
+                "probabilities": {},
+                "confidence": 0.0,
+                "latency_ms": 0.0,
+                "source": "score",
+                "error": None,
+                "score": round(parts["score"], 3),
+                "score_parts": {k: round(v, 3) for k, v in parts.items() if k != "score"},
+                "outcome": "skip",
+                "reason": "inflight",
+                "held_seconds": held,
+            }
+            self.n_hold += 1
+            return self._record(dpub)
 
         # 1. code-level risk first: stops do not wait for the model
         exit_reason = risk_exit(pos, snap.mid, held, self.settings)
@@ -292,10 +407,7 @@ class Engine:
                     "reason": exit_reason,
                     "held_seconds": held,
                 }
-                self.last_decision = dpub
-                self.decisions.append(dpub)
-                self.hub.emit("decision", dpub)
-                return await self._submit(symbol, intent)
+                return await self._trade(symbol, dpub, intent)
 
         # 2. build the state the model sees
         view = self.account.position_view(symbol)
@@ -325,13 +437,15 @@ class Engine:
         if decision.latency_ms:
             self.latencies.append(float(decision.latency_ms))
 
-        # 3. de-bias, then map the distribution onto the current position
+        # 3. score picks the side; the model only vetoes a confident opposite
         raw_probs = decision.probabilities or {}
-        adjusted = raw_probs
         if not decision.error:
-            adjusted = self.calibrator.adjust(symbol, raw_probs)
             self.calibrator.observe(symbol, raw_probs)
-        res = resolve(adjusted, pos.size, self.settings)
+        parts = direction_parts(snap)
+        res = apply_direction(
+            snap, pos.size, self.settings, None if decision.error else raw_probs,
+            entry=pos.entry, since_order=(now - last_at) if last_at else None,
+        )
         action = res.action
         conf = res.confidence
         if not decision.error:
@@ -342,7 +456,11 @@ class Engine:
             else:
                 self.n_hold += 1
 
-        if decision.error:
+        if res.reason.startswith("exit_"):
+            # flatten now; the other side can open on a later round
+            intent = close_intent(snap, pos, self.settings, res.reason)
+            reason = res.reason if intent is not None else "size_zero"
+        elif decision.error:
             intent, reason = None, "model_error"
         elif action == "hold":
             intent, reason = None, res.reason
@@ -350,35 +468,44 @@ class Engine:
             intent, reason = None, "buy_not_allowed"
         elif action == "sell" and not allowed["sell"]:
             intent, reason = None, "sell_not_allowed"
-        elif res.reason.startswith("exit_"):
-            # flatten the whole position; a flip is "exit now, open next round if still wanted"
-            intent = close_intent(snap, pos, self.settings, res.reason)
-            reason = res.reason if intent is not None else "size_zero"
         else:
             intent, reason = decide_intent(
-                snap, action, conf, adjusted, pos, self.settings, last_at,
+                snap, action, conf, raw_probs, pos, self.settings, last_at,
             )
             if reason == "ok":
                 reason = res.reason
+                intent.reason = res.reason
         dpub = {
             "symbol": symbol,
             "mid": snap.mid,
             "ts_ms": int(time.time() * 1000),
             **decision.as_public(),
             "model_action": decision.action,
-            "adjusted": {k: round(v, 4) for k, v in adjusted.items()},
+            "score": round(parts["score"], 3),
+            "score_parts": {k: round(v, 3) for k, v in parts.items() if k != "score"},
             "action": action,
             "confidence": conf,
             "outcome": "trade" if intent is not None else "skip",
             "reason": reason,
             "held_seconds": held,
         }
+        if intent is None:
+            return self._record(dpub)
+        return await self._trade(symbol, dpub, intent)
+
+    def _record(self, dpub: dict[str, Any]) -> dict[str, Any]:
         self.last_decision = dpub
         self.decisions.append(dpub)
         self.hub.emit("decision", dpub)
-        if intent is None:
-            return dpub
-        return await self._submit(symbol, intent)
+        return dpub
+
+    async def _trade(self, symbol: str, dpub: dict[str, Any], intent) -> dict[str, Any]:
+        opub = await self._submit(symbol, intent)
+        status = opub.get("status")
+        dpub["order_status"] = status
+        if status not in ("filled", "sent"):
+            dpub["outcome"] = "rejected"
+        return self._record(dpub)
 
     def _held_seconds(self, symbol: str, pos, now: float) -> float | None:
         side = pos.side()
@@ -391,13 +518,27 @@ class Engine:
             return 0.0
         return now - rec[1]
 
+    def _awaiting_fill(self, symbol: str, size: float, now: float) -> bool:
+        gate = self.hold_orders.get(symbol)
+        if not gate:
+            return False
+        before, until = gate
+        if abs(size - before) > 1e-8 or now >= until:
+            self.hold_orders.pop(symbol, None)
+            return False
+        return True
+
     async def _submit(self, symbol: str, intent) -> dict[str, Any]:
+        before = self.account.positions[symbol].size if symbol in self.account.positions else 0.0
         result: OrderResult = await self.executor.submit(intent)
         opub = result.as_public()
-        self.orders.append(opub)
+        self.orders.append(order_record(opub))
         self.hub.emit("order", opub)
         if result.filled or result.status in ("filled", "sent"):
+            self.n_orders += 1
             self.last_trade_at[symbol] = time.time()
+            self.hold_orders[symbol] = (before, time.time() + 8)
+            self._save_store(force=True)
         if result.filled:
             pos = self.account.positions.get(symbol)
             if pos is not None:

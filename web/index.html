@@ -3,132 +3,266 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>trade the book</title>
+  <title>trade with this-that · 实盘测评</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#f4f6fa" />
+  <script>
+    // set before first paint so a saved dark choice does not flash light
+    try { if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch {}
+  </script>
   <style>
     :root {
-      --bg: #f3efe6;
-      --paper: #fffcf7;
-      --ink: #161513;
-      --muted: #7a7468;
-      --faint: #a9a294;
-      --line: #e4ddd0;
-      --track: #ece7dc;
-      --buy: #1a1916;
-      --sell: #d94a3a;
-      --gain: #2f7a45;
-      --loss: #d94a3a;
-      --flash: #f0e6cf;
+      color-scheme: light;
+      --bg: #f4f6fa;
+      --surface: #ffffff;
+      --surface-2: #f7f8fb;
+      --surface-3: #eef1f6;
+      --line: #e5e8ef;
+      --line-2: #d3d9e3;
+      --text: #0f172a;
+      --text-2: #334155;
+      --muted: #64748b;
+      --faint: #8e98aa;
+      --track: #edf0f5;
+      --accent: #4f5fe6;
+      --accent-2: #3a46c2;
+      --info: #0e8fb5;
+      --buy: #14a06d;
+      --sell: #e5484d;
+      --hold: #c6cdd8;
+      --neutral: #aab3c2;
+      --gain: #0b8a5b;
+      --loss: #d92d43;
+      --mark: #f0a01c;
+      --on-accent: #ffffff;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px -18px rgba(15, 23, 42, 0.22);
+      --flash: color-mix(in srgb, var(--accent) 16%, transparent);
+      --radius: 12px;
+      --sans: Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0a0d13;
+      --surface: #10141c;
+      --surface-2: #151a24;
+      --surface-3: #1b2130;
+      --line: #1f2632;
+      --line-2: #2b3342;
+      --text: #e7eaf0;
+      --text-2: #b4bccb;
+      --muted: #8a93a3;
+      --faint: #5c6677;
+      --track: #1a1f2a;
+      --accent: #7c8dff;
+      --accent-2: #b3bcff;
+      --info: #5ec2ff;
+      --buy: #20b27a;
+      --sell: #ef4d5f;
+      --hold: #3d4859;
+      --neutral: #566174;
+      --gain: #3ad99b;
+      --loss: #ff6679;
+      --mark: #f5c451;
+      --on-accent: #0b0e14;
+      --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 12px 32px -20px rgba(0, 0, 0, 0.7);
+      --flash: color-mix(in srgb, var(--accent) 22%, transparent);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--ink); }
-    body { font: 14px/1.45 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; padding-bottom: 44px; }
-    button {
-      font: inherit;
-      background: var(--paper); color: var(--ink); border: 1px solid var(--line);
-      padding: 3px 9px; border-radius: 4px; cursor: pointer;
+    html { background: var(--bg); }
+    body {
+      margin: 0; color: var(--text); font: 14px/1.5 var(--sans); padding-bottom: 44px;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      background:
+        radial-gradient(1100px 420px at 8% -160px, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%),
+        radial-gradient(900px 380px at 100% -180px, color-mix(in srgb, var(--buy) 6%, transparent), transparent 70%),
+        var(--bg);
+      background-repeat: no-repeat;
     }
-    button:hover { border-color: #b8b09f; }
-    button:disabled { opacity: 0.45; cursor: default; }
-    .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-    .serif { font-family: Fraunces, Georgia, serif; letter-spacing: -0.03em; }
+    ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+    button {
+      font: inherit; font-size: 12px; line-height: 1.5; color: var(--text-2);
+      background: var(--surface-2); border: 1px solid var(--line-2);
+      padding: 2px 9px; border-radius: 6px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+    button:disabled { opacity: 0.35; cursor: default; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     .up { color: var(--gain); }
     .down { color: var(--loss); }
+    .right { text-align: right; }
 
     /* header */
+    header, .kpis, .layout { max-width: 1760px; margin-left: auto; margin-right: auto; }
     header {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-      padding: 22px 28px 6px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px 24px;
+      padding: 22px 28px 8px;
     }
-    .brand h1 { font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 700; margin: 0; letter-spacing: -0.03em; }
-    .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
-    .head-right { text-align: right; }
-    .speed { font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
-    .speed .live { color: var(--sell); }
-    .meta-line { color: var(--muted); font-size: 12px; margin-top: 4px; }
-    .pulse {
-      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-      background: var(--faint); margin-right: 8px; vertical-align: 2px;
+    .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .mark { width: 40px; height: 40px; flex: none; display: block; filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent)); }
+    .brand h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+    .brand h1 span {
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-    .running .pulse { background: var(--sell); animation: pulse 1.4s ease-in-out infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+    .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+    .head-right { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+      font-size: 12px; color: var(--text-2); white-space: nowrap;
+    }
+    .tag .tk { color: var(--faint); }
+    .tag b { font-weight: 600; color: var(--text); letter-spacing: 0.05em; }
+    .speed { color: var(--text); font-weight: 500; background: color-mix(in srgb, var(--buy) 8%, transparent); border-color: color-mix(in srgb, var(--gain) 28%, transparent); }
+    .speed .live { color: var(--gain); font-weight: 600; margin-left: 2px; }
+    /* theme switch */
+    .seg { padding: 3px; gap: 2px; }
+    .seg button {
+      display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 10px;
+      border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px;
+    }
+    .seg button svg { width: 13px; height: 13px; flex: none; }
+    .seg button:hover:not(:disabled) { color: var(--text); border-color: transparent; }
+    .seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-2); font-weight: 600; }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+    .running .pulse { background: var(--gain); animation: pulse 1.8s ease-out infinite; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gain) 55%, transparent); }
+      70% { box-shadow: 0 0 0 7px transparent; }
+      100% { box-shadow: 0 0 0 0 transparent; }
+    }
 
     /* kpis */
-    .kpis { display: grid; grid-template-columns: 1.4fr 1.1fr repeat(4, 1fr); gap: 10px; padding: 12px 28px 8px; }
-    .kpi { background: var(--paper); border: 1px solid var(--line); padding: 14px 16px; min-height: 96px; }
-    .kpi.dark { background: var(--ink); color: #f4efe6; border-color: var(--ink); --flash: #3a372f; }
-    .kpi .k { font-size: 11px; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 8px; }
-    .kpi.dark .k { color: #b7b1a4; }
-    .kpi .v {
-      font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;
-      font-variant-numeric: tabular-nums; display: inline-block; padding: 0 2px; margin: 0 -2px; border-radius: 3px;
+    .kpis { display: grid; grid-template-columns: 1.4fr 1.15fr repeat(4, 1fr); gap: 12px; padding: 14px 28px 0; }
+    .kpi {
+      position: relative; overflow: hidden; min-height: 102px; padding: 14px 16px 13px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
     }
-    .kpi .s { margin-top: 8px; font-size: 12px; color: var(--muted); }
-    .kpi.dark .s { color: #c9c3b6; }
-    .kpi.dark .up { color: #8ee0a6; }
-    .kpi.dark .down { color: #ff8b7d; }
+    .kpi.hero { background: linear-gradient(155deg, color-mix(in srgb, var(--accent) 9%, var(--surface)) 0%, var(--surface) 64%); border-color: color-mix(in srgb, var(--accent) 26%, var(--line)); }
+    .kpi.hero::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+    .kpi .k { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .kpi .v {
+      font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05;
+      font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
+      display: inline-block; padding: 0 3px; margin: 0 -3px; border-radius: 4px;
+    }
+    .kpi.hero .v { font-size: 30px; }
+    .kpi .s { margin-top: 9px; font-size: 12px; color: var(--muted); }
     .tick { animation: flashBg 0.9s ease-out; }
     @keyframes flashBg { from { background: var(--flash); } to { background: transparent; } }
 
     /* layout & cards */
-    .layout { display: grid; grid-template-columns: 1.35fr 0.9fr; gap: 12px; padding: 8px 28px 24px; align-items: start; }
-    .col { display: grid; gap: 12px; }
-    .card { background: var(--paper); border: 1px solid var(--line); padding: 14px 16px; }
-    .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-    .card h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
-    .card h2 b { color: var(--ink); font-weight: 600; }
-    .legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); white-space: nowrap; }
-    .legend i { display: inline-block; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; }
+    .layout { display: grid; grid-template-columns: 1.35fr 0.9fr; gap: 14px; padding: 14px 28px 24px; align-items: stretch; }
+    .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    /* the shorter column's last card absorbs the difference so both columns end on the same line */
+    .col > .card:last-child { flex: 1 0 auto; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 15px 18px 16px;
+      box-shadow: var(--shadow);
+    }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; min-height: 22px; }
+    .card h2 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .card h2::before {
+      content: ""; display: inline-block; width: 3px; height: 12px; border-radius: 2px;
+      background: var(--accent); margin-right: 9px; vertical-align: -1px;
+    }
+    .card h2 b { color: var(--accent-2); font-weight: 500; font-family: var(--mono); font-size: 12.5px; }
+    .legend { display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    .legend i.lg-traded { background: var(--track); box-shadow: inset 0 -3px 0 var(--mark); }
     .empty { color: var(--faint); font-size: 12px; padding: 12px 0; }
 
     /* wall */
-    .wall-row { display: grid; grid-template-columns: 42px 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
-    .wall-row .lab { font-size: 12px; color: var(--muted); }
-    .slots { display: grid; grid-template-columns: repeat(var(--slots, 48), 1fr); gap: 2px; }
-    .cell { height: 26px; background: var(--track); }
+    .wall-row { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; margin-bottom: 6px; }
+    .wall-row .lab { font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .slots { display: grid; grid-template-columns: repeat(var(--slots, 48), 1fr); gap: 3px; }
+    .cell { height: 28px; background: var(--track); border-radius: 3px; }
     .cell.buy { background: var(--buy); }
     .cell.sell { background: var(--sell); }
-    .cell.hold { background: var(--faint); }
+    .cell.hold { background: var(--hold); }
+    .cell.traded { box-shadow: inset 0 -4px 0 var(--mark); }
+    .cell:hover { outline: 1px solid var(--text-2); outline-offset: 1px; }
     .cell.new { animation: cellIn 0.5s ease-out; }
     @keyframes cellIn { from { transform: scaleY(0.2); opacity: 0.4; } to { transform: none; opacity: 1; } }
-    .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 6px; padding-left: 50px; }
+    .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-top: 8px; padding-left: 52px; }
 
     /* chart */
     .chart-wrap { position: relative; }
-    #chart { width: 100%; height: 220px; display: block; }
-    .ylab { position: absolute; right: 0; font-size: 11px; color: var(--faint); background: var(--paper); padding: 0 4px; }
+    #chart { width: 100%; height: 220px; display: block; overflow: visible; }
+    #chart .grid { stroke: var(--line); stroke-width: 1; }
+    #chart .base { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 4 4; }
+    #chart .bh { stroke: var(--muted); stroke-opacity: 0.75; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    #chart .eq { stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    #chart .g-gain { stop-color: var(--gain); }
+    #chart .g-loss { stop-color: var(--loss); }
+    .enddot {
+      display: none; position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
+      border-radius: 50%; pointer-events: none; background: var(--accent);
+    }
+    .enddot.gain { background: var(--gain); box-shadow: 0 0 0 4px color-mix(in srgb, var(--gain) 18%, transparent); }
+    .enddot.loss { background: var(--loss); box-shadow: 0 0 0 4px color-mix(in srgb, var(--loss) 18%, transparent); }
+    .ylab {
+      position: absolute; right: 0; font-size: 11px; color: var(--muted);
+      background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 6px; border-radius: 4px;
+    }
     .ylab.top { top: 4px; } .ylab.bot { bottom: 4px; }
-    .chart-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
-    .dot { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
+    .ylab:empty { display: none; }
+    .chart-legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+    .chart-legend .num { color: var(--text); margin-left: 2px; }
+    .dot { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+    .dot.eq { border-color: var(--accent); }
+    .dot.bh { border-color: var(--muted); border-top-style: dashed; }
+    .dot.base { border-color: var(--line-2); border-top-style: dashed; }
 
     /* now */
-    .prices { display: grid; grid-template-columns: repeat(var(--m, 2), 1fr); gap: 10px; margin-bottom: 12px; }
-    .price { border: 1px solid var(--line); padding: 10px 12px; }
-    .price .sym { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
-    .price .mid { font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin-top: 2px; transition: color 0.6s ease; }
+    .prices { display: grid; grid-template-columns: repeat(var(--m, 2), 1fr); gap: 10px; margin-bottom: 10px; }
+    .price {
+      position: relative; overflow: hidden; padding: 11px 13px 11px 15px;
+      background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+    }
+    .price::before {
+      content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+      border-radius: 0 2px 2px 0; background: var(--sym, var(--accent));
+    }
+    .price[data-sym="BTC"], .drow[data-sym="BTC"] { --sym: #f7931a; }
+    .price[data-sym="ETH"], .drow[data-sym="ETH"] { --sym: #6f86ee; }
+    .price .sym { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+    .price .mid { font-size: 22px; font-weight: 600; line-height: 1.2; margin-top: 3px; color: var(--text); transition: color 0.6s ease; }
     .price .mid.rise { color: var(--gain); transition: none; }
     .price .mid.fall { color: var(--loss); transition: none; }
     .price .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
     .drow {
-      display: grid; grid-template-columns: 26px 40px 46px 1fr 40px; gap: 8px;
-      align-items: center; padding: 8px 0; border-top: 1px solid var(--line);
+      display: grid; grid-template-columns: 26px 40px 46px 1fr 40px; gap: 5px 8px;
+      align-items: center; padding: 10px 0 9px; border-top: 1px solid var(--line);
     }
-    .drow .why { grid-column: 2 / -1; font-size: 11px; color: var(--muted); margin-top: -4px; }
+    .drow > :nth-child(2) { font-weight: 600; }
+    .drow .why { grid-column: 2 / -1; font-size: 11.5px; color: var(--muted); }
+    .drow .why.up { color: var(--gain); }
     .badge {
-      width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff;
-      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+      width: 24px; height: 24px; border-radius: 50%; background: var(--sym, var(--surface-3)); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
     }
-    .act { font-size: 11px; letter-spacing: 0.08em; font-weight: 600; }
-    .act.buy { color: var(--ink); }
-    .act.sell { color: var(--sell); }
-    .act.hold { color: var(--muted); }
-    .pbar { display: flex; height: 8px; background: var(--track); overflow: hidden; }
+    .act {
+      justify-self: start; min-width: 42px; padding: 1px 0; border-radius: 5px; text-align: center;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; line-height: 1.6;
+    }
+    .act.buy { color: var(--gain); background: color-mix(in srgb, var(--buy) 15%, transparent); }
+    .act.sell { color: var(--loss); background: color-mix(in srgb, var(--sell) 15%, transparent); }
+    .act.hold { color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent); }
+    .pbar { display: flex; height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
     .pbar i { display: block; height: 100%; transition: width 0.5s ease; }
     .pbar .b { background: var(--buy); }
     .pbar .s { background: var(--sell); }
-    .pbar .h { background: var(--faint); }
+    .pbar .h { background: var(--hold); }
     .flash { animation: flashBg 0.9s ease-out; }
 
     /* feed */
@@ -136,91 +270,179 @@
       display: grid; grid-template-columns: 56px 34px 44px minmax(80px, 1fr) 42px 54px 84px;
       gap: 8px; align-items: center; font-size: 12px;
     }
-    .fhead { color: var(--faint); font-size: 11px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-    .frow { padding: 7px 0; border-bottom: 1px solid var(--line); min-height: 33px; cursor: pointer; }
-    .frow:hover { background: #f7f2e8; }
-    .frow.on { background: #f0e6cf; }
-    .frow.blank { border-bottom-color: transparent; cursor: default; }
+    .fhead { color: var(--faint); font-size: 11px; padding: 0 8px 8px; margin: 0 -8px; border-bottom: 1px solid var(--line); }
+    .frow { padding: 6px 8px; margin: 0 -8px; border-bottom: 1px solid var(--line); min-height: 35px; transition: background 0.15s; }
+    .frow:hover { background: var(--surface-2); }
     .frow.blank { border-bottom-color: transparent; }
+    .frow.blank:hover { background: transparent; }
     .frow .t { color: var(--muted); }
     .frow .lat, .fhead .lat { text-align: right; color: var(--muted); }
     .frow .why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .frow .why.traded { color: var(--gain); font-weight: 600; }
-    .frow .why.err { color: var(--sell); }
+    .frow .why.err { color: var(--loss); }
     .conf { text-align: right; font-weight: 500; }
     .anim-in { animation: rowIn 0.45s ease-out; }
     @keyframes rowIn { from { opacity: 0; transform: translateY(-6px); background: var(--flash); } to { opacity: 1; transform: none; background: transparent; } }
-    .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
-    .pager .nav { display: flex; gap: 4px; align-items: center; }
-    .pager button { padding: 3px 9px; font-size: 12px; }
+    .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .nav { display: flex; gap: 4px; align-items: center; }
+    .nav > .num { min-width: 50px; text-align: center; color: var(--text-2); font-size: 12px; }
     .pill {
-      background: var(--ink); color: var(--paper); border: 0; border-radius: 999px; padding: 3px 10px; font-size: 11px; cursor: pointer;
-      animation: rowIn 0.3s ease-out;
+      background: var(--accent); color: var(--on-accent); border: 0; border-radius: 999px;
+      padding: 3px 11px; font-size: 11.5px; font-weight: 600; animation: rowIn 0.3s ease-out;
     }
-    .pill:hover { background: #2e2c27; }
+    .pill:hover:not(:disabled) { background: var(--accent-2); color: var(--on-accent); }
 
     /* book */
     .book-head, .book-row {
       display: grid; grid-template-columns: 72px repeat(var(--m, 2), minmax(48px, 1fr)) 120px;
-      gap: 6px; align-items: center; font-size: 12px;
+      gap: 8px; align-items: center; font-size: 12px;
     }
     .book-head { color: var(--faint); font-size: 11px; margin-bottom: 8px; }
+    .book-head > :not(:first-child):not(.right), .book-row > .num:not(.right) { text-align: center; }
     .book-row { margin-bottom: 8px; }
     .book-row .lab { color: var(--muted); }
-    .chip { min-height: 28px; display: flex; align-items: center; justify-content: center; background: var(--track); font-weight: 600; transition: background 0.4s ease; }
-    .chip.long { background: var(--buy); color: #f4efe6; }
-    .chip.short { background: var(--sell); color: #fff; }
+    .chip {
+      min-height: 32px; display: flex; align-items: center; justify-content: center;
+      background: var(--track); border: 1px solid var(--line); border-radius: 7px;
+      font-weight: 600; transition: background 0.4s ease, border-color 0.4s ease;
+    }
+    .chip.long { background: color-mix(in srgb, var(--buy) 14%, transparent); border-color: color-mix(in srgb, var(--gain) 35%, transparent); color: var(--gain); }
+    .chip.short { background: color-mix(in srgb, var(--sell) 14%, transparent); border-color: color-mix(in srgb, var(--loss) 35%, transparent); color: var(--loss); }
     .chip.flat { color: var(--faint); }
-    .right { text-align: right; }
 
+    /* direction score */
+    .srow {
+      display: grid; grid-template-columns: 42px 58px minmax(0, 1fr) 230px; gap: 6px 10px; align-items: center;
+      padding: 10px 0; border-top: 1px solid var(--line);
+    }
+    .srow:first-child { border-top: 0; padding-top: 0; }
+    .srow .lab { font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .srow .sv { font-family: var(--mono); font-size: 18px; font-weight: 600; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .srow .verdict { font-size: 12px; color: var(--text-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .srow .lots { grid-column: 2; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .sbar { position: relative; height: 8px; background: var(--track); border-radius: 4px; }
+    .sbar i { position: absolute; top: 0; bottom: 0; }
+    .sbar .fill { background: var(--neutral); border-radius: 4px; transition: left 0.5s ease, width 0.5s ease; }
+    .sbar .fill.buy { background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 50%, transparent), var(--buy)); }
+    .sbar .fill.sell { background: linear-gradient(90deg, var(--sell), color-mix(in srgb, var(--sell) 50%, transparent)); }
+    .sbar .mark { width: 2px; margin-left: -1px; top: -4px; bottom: -4px; border-radius: 1px; background: var(--faint); }
+    .sbar .mark.zero { background: var(--text-2); }
+    .sparts { grid-column: 3 / -1; display: flex; flex-wrap: wrap; gap: 2px 16px; font-size: 11px; color: var(--faint); }
+    .sparts b { margin-left: 5px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--muted); }
+    .srow .sv.bull, .sparts b.bull { color: var(--gain); }
+    .srow .sv.bear, .sparts b.bear { color: var(--loss); }
+    .saxis { position: relative; height: 14px; margin: 2px 240px 0 120px; font-size: 10px; color: var(--faint); }
+    .saxis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+    .saxis span:first-child { transform: none; }
+    .saxis span:last-child { transform: translateX(-100%); }
+
+    /* order log: reuses the feed row styles */
+    .olog .fhead, .olog .frow { grid-template-columns: 72px 36px 44px 64px minmax(64px, 1fr) minmax(72px, 1fr) 64px 52px; }
+    .olog .kind { color: var(--text-2); white-space: nowrap; }
+    .olog .kind::before {
+      content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; margin-right: 6px; vertical-align: 1px;
+    }
+    .olog .kind.open { color: var(--accent-2); }
+    .olog .kind.add { color: var(--info); }
+    .olog .kind.exit { color: var(--text-2); }
+    .olog .kind.risk { color: var(--loss); }
+    .olog .st { text-align: right; color: var(--muted); }
+    .olog .st.err { color: var(--loss); }
+    .olog .nav button { padding: 1px 8px; }
 
     /* status bar */
     .statusbar {
-      position: fixed; left: 0; right: 0; bottom: 0; height: 32px;
-      background: var(--paper); border-top: 1px solid var(--line);
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; height: 32px;
+      background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--line);
       display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
       font-size: 11px; color: var(--muted);
     }
-    .conn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 1px; }
-    .conn.ok { background: var(--gain); }
-    .conn.bad { background: var(--sell); animation: pulse 1s ease-in-out infinite; }
+    .conn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 7px; vertical-align: 1px; }
+    .conn.ok { background: var(--gain); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gain) 15%, transparent); }
+    .conn.bad { background: var(--loss); animation: blink 1s ease-in-out infinite; }
+    @keyframes blink { 50% { opacity: 0.25; } }
 
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
     @media (max-width: 1100px) {
       .kpis { grid-template-columns: 1fr 1fr; }
       .layout { grid-template-columns: 1fr; }
-      header { flex-direction: column; }
-      .head-right { text-align: left; }
+      header { flex-direction: column; align-items: flex-start; }
+      .head-right { justify-content: flex-start; }
+    }
+    @media (max-width: 700px) {
+      header, .layout, .kpis { padding-left: 14px; padding-right: 14px; }
+      .brand h1 { font-size: 19px; }
+      .kpi { min-height: 0; padding: 12px 14px; }
+      .kpi .v { font-size: 22px; }
+      .kpi.hero .v { font-size: 24px; }
+      .card { padding: 14px; }
+      .card-head { flex-wrap: wrap; }
+      .legend { white-space: normal; flex-wrap: wrap; gap: 6px 12px; }
+      .slots { gap: 1px; }
+      .cell { height: 24px; border-radius: 1px; }
+      .srow { grid-template-columns: 42px 58px minmax(0, 1fr); }
+      .srow .verdict { grid-column: 2 / -1; text-align: left; }
+      .saxis { margin-right: 0; }
+      .fhead, .frow { grid-template-columns: 52px 30px 44px minmax(40px, 1fr) 90px; gap: 6px; font-size: 11.5px; }
+      .fhead > .lat, .frow > .lat, .fhead > :nth-child(5), .frow > .conf { display: none; }
+      .olog .fhead, .olog .frow { grid-template-columns: 70px 30px 44px 1fr 56px 44px; }
+      .olog .fhead > :nth-child(5), .olog .frow > :nth-child(5),
+      .olog .fhead > :nth-child(6), .olog .frow > :nth-child(6) { display: none; }
+      .statusbar { padding: 0 14px; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <h1>trade the book</h1>
-      <div class="sub" id="subtitle">纸上模拟 · Lighter 永续 · 等待连接</div>
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <linearGradient id="markGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#a9b4ff"/>
+            <stop offset="1" stop-color="#5a6cf2"/>
+          </linearGradient>
+        </defs>
+        <rect width="40" height="40" rx="11" fill="url(#markGrad)"/>
+        <rect x="9" y="13" width="9" height="14" rx="2.5" fill="#0b0e14" fill-opacity="0.88"/>
+        <circle cx="26.5" cy="20" r="5.5" fill="none" stroke="#0b0e14" stroke-opacity="0.88" stroke-width="3"/>
+      </svg>
+      <div>
+        <h1>trade with <span>this-that</span></h1>
+        <div class="sub" id="subtitle">this-that-model-1.0 交易测评 · Lighter 永续 · 等待连接</div>
+      </div>
     </div>
     <div class="head-right">
-      <div class="speed"><span class="pulse"></span><span id="speedText">连续运行</span></div>
-      <div class="meta-line"><span id="metaBackend">—</span> · <span id="metaState">LIVE</span> · <span class="num" id="clock"></span></div>
+      <div class="tag speed"><span class="pulse"></span><span id="speedText">连续运行</span></div>
+      <div class="tag"><span class="tk">决策引擎</span><span id="metaBackend">—</span></div>
+      <div class="tag"><span class="tk">模式</span><b id="metaState">LIVE</b></div>
+      <div class="tag"><span class="num" id="clock"></span></div>
+      <div class="tag seg" role="group" aria-label="配色">
+        <button type="button" data-theme-set="light" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>日间
+        </button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>夜间
+        </button>
+      </div>
     </div>
   </header>
 
   <section class="kpis">
-    <div class="kpi dark">
-      <div class="k">账户净值 · 抵押 <span id="kStart">—</span></div>
+    <div class="kpi hero">
+      <div class="k">账户净值 · 抵押+浮动</div>
       <div class="v" id="kEquity">—</div>
       <div class="s"><span id="kEquitySub">—</span></div>
     </div>
-    <div class="kpi dark">
+    <div class="kpi hero">
       <div class="k">累计盈亏 · 浮动+已实现</div>
       <div class="v" id="kPnl">—</div>
-      <div class="s"><span id="kPnlSub">—</span></div>
+      <div class="s" title="已实现 = 抵押相对起点的变化，含平仓盈亏、手续费和资金费"><span id="kPnlSub">—</span></div>
     </div>
     <div class="kpi">
       <div class="k">已跑轮次</div>
       <div class="v" id="kCycles">0</div>
-          <div class="s" id="kLoopHint">连续决策</div>
+      <div class="s" id="kLoopHint">连续决策</div>
     </div>
     <div class="kpi">
       <div class="k">决策数</div>
@@ -247,7 +469,8 @@
           <div class="legend">
             <span><i style="background:var(--buy)"></i>BUY</span>
             <span><i style="background:var(--sell)"></i>SELL</span>
-            <span><i style="background:var(--faint)"></i>HOLD</span>
+            <span><i style="background:var(--hold)"></i>HOLD</span>
+            <span><i class="lg-traded"></i>已下单</span>
             <span><i style="background:var(--track)"></i>未到</span>
           </div>
         </div>
@@ -263,12 +486,43 @@
           <svg id="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
           <span class="ylab top num" id="yTop"></span>
           <span class="ylab bot num" id="yBot"></span>
+          <i class="enddot" id="endDot"></i>
         </div>
         <div class="chart-legend">
-          <span><i class="dot" style="background:#161513"></i>策略 <span class="num" id="legEq">—</span></span>
-          <span><i class="dot" style="background:#b8b09f"></i>等权买入持有 <span class="num" id="legBh">—</span></span>
-          <span><i class="dot" style="background:#d9d2c4"></i>本金线</span>
+          <span><i class="dot eq"></i>策略 <span class="num" id="legEq">—</span></span>
+          <span><i class="dot bh"></i>等权买入持有 <span class="num" id="legBh">—</span></span>
+          <span><i class="dot base"></i>本金线</span>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>方向分 · <b id="scoreMeta">—</b></h2>
+          <div class="legend"><span id="scoreRule">—</span></div>
+        </div>
+        <div id="scores"></div>
+        <div class="saxis" id="scoreAxis"></div>
+      </section>
+
+      <section class="card olog">
+        <div class="card-head">
+          <h2>下单记录 · 最近 <b id="ordCount">0</b> 笔</h2>
+          <div class="legend">
+            <span id="ordMix">—</span>
+            <div class="nav">
+              <button id="oFirst" type="button" title="最新">«</button>
+              <button id="oPrev" type="button">‹</button>
+              <span class="num" id="oNum">1 / 1</span>
+              <button id="oNext" type="button">›</button>
+            </div>
+          </div>
+        </div>
+        <div class="fhead">
+          <div>时间</div><div>标的</div><div>方向</div><div>类型</div>
+          <div class="right">数量</div><div class="right" title="发单时的盘口买一/卖一价，不是成交均价">盘口价</div>
+          <div class="right">名义</div><div class="right">状态</div>
+        </div>
+        <div id="orders"></div>
       </section>
     </div>
 
@@ -276,7 +530,7 @@
       <section class="card">
         <div class="card-head">
           <h2>当前决策 · <b id="nowWhen">—</b></h2>
-          <div class="legend"><span>置信门槛 <span class="num" id="nowThreshold">—</span></span></div>
+          <div class="legend"><span>开仓门槛 <span class="num" id="nowThreshold">—</span></span></div>
         </div>
         <div class="prices" id="prices"></div>
         <div id="nowRows"></div>
@@ -324,15 +578,18 @@
     const PAGE_SIZE = 10;
     const WALL_SLOTS = 48;
     const KEEP_DECISIONS = 200;
+    const ORDER_PAGE = 5;
+    const KEEP_ORDERS = 100;
 
     const state = {
       running: false, mode: "paper", model: "mock", backend: "",
       markets: ["BTC", "ETH"], loop_seconds: 20, min_confidence: 0.58, max_position_usd: null,
-      tickers: {}, prevMid: {}, account: null, cycles: [], equity_curve: [],
-      stats: {}, best_round: null, worst_round: null, orders: [],
-      decisions: [], lastBySymbol: {},
+      tickers: {}, prevMid: {}, account: null, cycles: [], equity_curve: [], curve_rev: null,
+      stats: {}, policy: {}, orders: [],
+      decisions: [], lastBySymbol: {}, lastScore: {},
     };
     const feed = { page: 1, unseen: 0 };
+    const olog = { page: 1 };
     let lastWallTs = null;
     let connectedOnce = false;
 
@@ -345,13 +602,38 @@
       keep_long: "持有多仓", keep_short: "持有空仓",
       open: "开仓", exit_long: "平多", exit_short: "平空", add_long: "加多", add_short: "加空",
       stop_loss: "止损", take_profit: "止盈", time_exit: "超时平仓",
+      score_flat: "分数不足", model_veto: "模型否决", trend_conflict: "涨跌不一致", inflight: "等待成交",
+      account_sync: "账户同步中",
+      add_off: "未开加仓", add_max: "已满仓", add_wait: "加仓冷却", add_underwater: "浮亏不加仓",
     };
-    function reasonText(d) {
+    function reasonLabel(d) {
       if (d.error) return "错误";
+      if (d.outcome === "rejected") return `下单失败 · ${REASON_ZH[d.reason] || d.reason || ""}`;
       const r = d.reason || "";
       if (REASON_ZH[r]) return REASON_ZH[r];
       if (r.startsWith("low_confidence")) return "置信不足";
       return r || (d.outcome === "trade" ? "已下单" : "");
+    }
+    function reasonText(d) {
+      const label = reasonLabel(d);
+      if (!hasScore(d)) return label;
+      const n = scoreText(d.score);
+      return label ? `${label} · ${n}` : n;
+    }
+    // toward zero, so a score shown as ±8.0 has really reached a ±8 threshold
+    function scoreText(v) { return signed(Math.trunc((Number(v) || 0) * 10) / 10, 1); }
+    function hasScore(d) { return typeof d.score === "number" && Number.isFinite(d.score); }
+
+    const ORDER_KIND = {
+      open: ["开仓", "open"], model: ["开仓", "open"],
+      add_long: ["加多", "add"], add_short: ["加空", "add"],
+      exit_long: ["平多", "exit"], exit_short: ["平空", "exit"],
+      take_profit: ["止盈", "exit"], time_exit: ["超时平仓", "exit"], stop_loss: ["止损", "risk"],
+    };
+    function orderKind(o) {
+      const k = ORDER_KIND[o.reason];
+      if (k) return { label: k[0], group: k[1] };
+      return o.reduce_only ? { label: "平仓", group: "exit" } : { label: "开仓", group: "open" };
     }
 
     /* ---------- formatting ---------- */
@@ -365,12 +647,25 @@
     }
     function signedMoney(n, d=2) {
       if (n == null || Number.isNaN(n)) return "—";
-      const sign = n > 0 ? "+" : n < 0 ? "-" : "";
-      return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+      const r = Math.round(n * 10 ** d);
+      const sign = r > 0 ? "+" : r < 0 ? "-" : "";
+      return sign + "$" + (Math.abs(r) / 10 ** d).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
     }
-    function clsPnl(n) { return n > 0 ? "up" : n < 0 ? "down" : ""; }
-    function clock(ms) { return new Date(ms || Date.now()).toLocaleString("zh-CN", { hour12: false }); }
+    function signed(n, d=2) {
+      const r = Math.round((Number(n) || 0) * 10 ** d) / 10 ** d;
+      return r === 0 ? (0).toFixed(d) : (r > 0 ? "+" : "-") + Math.abs(r).toFixed(d);
+    }
+    function dirCls(v, min=0) {
+      const r = Math.round((Number(v) || 0) * 100) / 100;
+      return r > 0 && r >= min ? "bull" : r < 0 && r <= -min ? "bear" : "";
+    }
+    function clsPnl(n, d=2) { const r = Math.round((n || 0) * 10 ** d); return r > 0 ? "up" : r < 0 ? "down" : ""; }
     function hms(ms) { return new Date(ms || Date.now()).toLocaleTimeString("zh-CN", { hour12: false }); }
+    function stamp(ms) {
+      const t = new Date(ms), now = new Date();
+      if (t.toDateString() === now.toDateString()) return hms(ms);
+      return `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+    }
     function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
     /* set text; flash when it changes */
@@ -390,9 +685,15 @@
     /* ---------- static-ish: config ---------- */
     function renderConfig() {
       $("subtitle").textContent =
-        `${state.mode === "live" ? "Lighter 实盘" : "纸上模拟"} · ${(state.markets || []).join(" / ")} 永续 · ${state.model} · 连续决策`;
-      setText("nowThreshold", `${(state.min_confidence * 100).toFixed(0)}%`);
-      setText("maxPos", state.max_position_usd ? money(state.max_position_usd, 0) : "不限");
+        `${state.model} ${state.mode === "live" ? "实盘测评" : "模拟测评"} · Lighter ${(state.markets || []).join(" / ")} 永续 · 连续决策`;
+      const pol = state.policy || {};
+      setText("nowThreshold", pol.dir_min != null
+        ? `方向分 ±${fmt(pol.dir_min, 0)} · 否决 ${fmt((pol.model_veto || 0) * 100, 0)}%`
+        : `${(state.min_confidence * 100).toFixed(0)}%`);
+      const lots = pol.allow_add ? 1 + (pol.max_adds || 0) : 1;
+      setText("maxPos", state.max_position_usd
+        ? money(state.max_position_usd, 0)
+        : `${lots} 笔 × ${money(state.trade_notional_usd || 0, 0)}`);
       setText("metaBackend", state.backend || "mock");
       setText("axisN", WALL_SLOTS);
       $("prices").style.setProperty("--m", (state.markets || []).length || 2);
@@ -411,14 +712,19 @@
     function renderKpis() {
       const a = state.account || {};
       const st = state.stats || {};
-      const equity = a.equity ?? a.start_equity;
-      const pnl = a.pnl_usd ?? 0;
-      const pct = a.pnl_pct ?? 0;
-      setText("kStart", money(a.cash ?? a.start_equity, 0));
-      setText("kEquity", money(equity), { flash: true });
-      setText("kEquitySub", `可用 ${money(a.available ?? a.cash)} · 浮动 ${signedMoney(a.unrealized_usd ?? ((a.equity || 0) - (a.cash || 0)))}`);
-      setText("kPnl", signedMoney(pnl), { flash: true, cls: clsPnl(pnl) });
-      setText("kPnlSub", `浮动 ${signedMoney(a.unrealized_usd)} · 已实现 ${signedMoney(a.realized_usd)} · ${pct >= 0 ? "+" : ""}${fmt(pct, 2)}%`);
+      if (!a.synced) {
+        setText("kEquity", "同步中");
+        setText("kEquitySub", "等待交易所账户");
+        setText("kPnl", "—", { cls: "" });
+        setText("kPnlSub", "—");
+      } else {
+        const pnl = a.pnl_usd ?? 0;
+        const pct = a.pnl_pct ?? 0;
+        setText("kEquity", money(a.equity), { flash: true });
+        setText("kEquitySub", `抵押 ${money(a.cash)} · 可用 ${money(a.available)} · 浮动 ${signedMoney(a.unrealized_usd)}`);
+        setText("kPnl", signedMoney(pnl), { flash: true, cls: clsPnl(pnl) });
+        setText("kPnlSub", `浮动 ${signedMoney(a.unrealized_usd)} · 已实现 ${signedMoney(a.realized_usd)} · ${pct >= 0 ? "+" : ""}${fmt(pct, 2)}%`);
+      }
       setText("kCycles", st.n_cycles || 0, { flash: true });
       setText("kDecisions", st.n_decisions || 0, { flash: true });
       setText("kDecSub", `${fmt(st.decisions_per_min || 0, 1)} 次/分 · 下单 ${st.n_orders || 0}`);
@@ -450,8 +756,10 @@
           const r = (c.results || []).find(x => x.symbol === sym) || {};
           const act = (r.action || "").toLowerCase();
           const isNew = animateLast && i === cycles.length - 1 ? " new" : "";
-          const tip = act ? `${sym} ${act.toUpperCase()} · ${hms(c.ts_ms)}${r.outcome === "trade" ? " · 已下单" : ""}` : `${sym} · ${hms(c.ts_ms)}`;
-          cells.push(`<div class="cell ${act}${isNew}" title="${esc(tip)}"></div>`);
+          const traded = r.outcome === "trade" ? " traded" : "";
+          const why = r.outcome === "trade" ? " · 已下单" : r.outcome === "rejected" ? " · 下单失败" : r.reason === "account_sync" ? " · 账户同步中" : "";
+          const tip = `${sym}${act ? " " + act.toUpperCase() : ""} · ${hms(c.ts_ms)}${why}`;
+          cells.push(`<div class="cell ${act}${traded}${isNew}" title="${esc(tip)}"></div>`);
         });
         return `<div class="wall-row"><div class="lab">${esc(sym)}</div><div class="slots" style="--slots:${WALL_SLOTS}">${cells.join("")}</div></div>`;
       }).join("");
@@ -462,14 +770,17 @@
     /* ---------- chart ---------- */
     function renderChart() {
       const svg = $("chart");
+      const a = state.account || {};
       const pts = state.equity_curve || [];
-      const start = (state.account || {}).start_equity;
-      setText("startEq", money(start));
-      if (pts.length < 2) {
+      const dot = $("endDot");
+      const start = a.synced ? a.start_equity : null;
+      setText("startEq", start == null ? "—" : `${money(start)}${a.start_ts_ms ? " · " + stamp(a.start_ts_ms) : ""}`);
+      if (start == null || pts.length < 2) {
         svg.innerHTML = "";
-        setText("chartRange", "第二轮后出现曲线");
+        dot.style.display = "none";
+        setText("chartRange", start == null ? "等待账户同步" : "第二轮后出现曲线");
         setText("yTop", ""); setText("yBot", "");
-        setText("legEq", money(start)); setText("legBh", "—");
+        setText("legEq", start == null ? "—" : money(a.equity)); setText("legBh", "—");
         return;
       }
       const w = 640, h = 220, pad = 10;
@@ -479,29 +790,50 @@
       const minSpan = Math.max(Math.abs(start) * 0.00005, 0.25);
       if (max - min < minSpan) { const mid = (max + min) / 2; min = mid - minSpan / 2; max = mid + minSpan / 2; }
       const span = max - min; min -= span * 0.1; max += span * 0.1;
-      const x = (i) => pad + i * (w - pad * 2) / (pts.length - 1);
+      const t0 = pts[0].ts_ms, last = pts[pts.length - 1];
+      const tspan = Math.max(1, last.ts_ms - t0);
+      const x = (p) => pad + (p.ts_ms - t0) / tspan * (w - pad * 2);
       const y = (v) => pad + (1 - (v - min) / (max - min)) * (h - pad * 2);
-      const path = (key) => pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p[key] ?? p.equity).toFixed(1)}`).join(" ");
-      const last = pts[pts.length - 1];
+      const gaps = pts.slice(1).map((p, i) => p.ts_ms - pts[i].ts_ms).sort((m, n) => m - n);
+      const gapMs = Math.max(5 * 60 * 1000, (gaps[gaps.length >> 1] || 0) * 20);
+      // a gap longer than gapMs is a restart or outage: lift the pen instead of drawing a fake slope
+      const path = (key) => {
+        let d = "", prev = null;
+        for (const p of pts) {
+          const v = p[key];
+          if (v == null) { prev = null; continue; }
+          d += `${prev && p.ts_ms - prev.ts_ms <= gapMs ? "L" : "M"}${x(p).toFixed(1)},${y(v).toFixed(1)} `;
+          prev = p;
+        }
+        return d;
+      };
+      const area = pts.map((p, i) => `${i ? "L" : "M"}${x(p).toFixed(1)},${y(p.equity).toFixed(1)}`).join(" ");
       const hasBh = pts.some(p => p.buy_hold != null);
       const y0 = y(start);
       const gain = last.equity >= start;
+      const tone = gain ? "g-gain" : "g-loss";
+      const grid = [0.25, 0.5, 0.75].map(f => (pad + f * (h - pad * 2)).toFixed(1));
       svg.innerHTML = `
         <defs>
           <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="${gain ? "#2f7a45" : "#d94a3a"}" stop-opacity="0.16"/>
-            <stop offset="1" stop-color="${gain ? "#2f7a45" : "#d94a3a"}" stop-opacity="0"/>
+            <stop offset="0" class="${tone}" stop-opacity="0.24"/>
+            <stop offset="1" class="${tone}" stop-opacity="0"/>
           </linearGradient>
         </defs>
-        <path d="M${pad},${y0.toFixed(1)} H${w - pad}" stroke="#d9d2c4" stroke-dasharray="4 4" fill="none"/>
-        <path d="${path("equity")} L${x(pts.length - 1).toFixed(1)},${y0.toFixed(1)} L${pad},${y0.toFixed(1)} Z" fill="url(#fill)" stroke="none"/>
-        ${hasBh ? `<path d="${path("buy_hold")}" fill="none" stroke="#b8b09f" stroke-dasharray="5 4" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : ""}
-        <path d="${path("equity")}" fill="none" stroke="#161513" stroke-width="2" vector-effect="non-scaling-stroke"/>
-        <circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last.equity).toFixed(1)}" r="3.5" fill="${gain ? "#2f7a45" : "#d94a3a"}"/>`;
+        ${grid.map(gy => `<path class="grid" d="M${pad},${gy} H${w - pad}" vector-effect="non-scaling-stroke"/>`).join("")}
+        <path class="base" d="M${pad},${y0.toFixed(1)} H${w - pad}" fill="none" vector-effect="non-scaling-stroke"/>
+        <path d="${area} L${x(last).toFixed(1)},${y0.toFixed(1)} L${pad},${y0.toFixed(1)} Z" fill="url(#fill)" stroke="none"/>
+        ${hasBh ? `<path class="bh" d="${path("buy_hold")}" fill="none" vector-effect="non-scaling-stroke"/>` : ""}
+        <path class="eq" d="${path("equity")}" fill="none" vector-effect="non-scaling-stroke"/>`;
+      // a circle inside the stretched viewBox would render as an ellipse
+      dot.className = `enddot ${gain ? "gain" : "loss"}`;
+      dot.style.left = `${(x(last) / w * 100).toFixed(2)}%`;
+      dot.style.top = `${(y(last.equity) / h * 100).toFixed(2)}%`;
+      dot.style.display = "block";
       setText("yTop", money(max)); setText("yBot", money(min));
-      setText("chartRange", `${hms(pts[0].ts_ms)} → ${hms(last.ts_ms)} · ${pts.length} 点`);
+      setText("chartRange", `${stamp(t0)} → ${stamp(last.ts_ms)} · ${pts.length} 点`);
       setText("legEq", money(last.equity));
-      setText("legBh", hasBh ? money(last.buy_hold) : "—");
+      setText("legBh", last.buy_hold != null ? money(last.buy_hold) : "—");
     }
 
     /* ---------- now: prices + latest decision per market ---------- */
@@ -554,7 +886,7 @@
       if (!rows.length) { $("nowRows").innerHTML = `<div class="empty">启动后，每个标的的最新判断会显示在这里。</div>`; return; }
       $("nowRows").innerHTML = rows.map(r => {
         const p = r.probabilities || {};
-        const act = (r.action || "buy").toLowerCase();
+        const act = (r.action || "hold").toLowerCase();
         const traded = r.outcome === "trade";
         return `<div class="drow" data-sym="${esc(r.symbol)}">
           <div class="badge">${esc((r.symbol || "?")[0])}</div>
@@ -589,9 +921,9 @@
       const startIdx = (feed.page - 1) * PAGE_SIZE;
       const rows = all.slice(startIdx, startIdx + PAGE_SIZE);
       const html = rows.map((d, i) => {
-        const act = (d.action || "buy").toLowerCase();
-        const traded = d.outcome === "trade" || d.reason === "ok";
-        const whyCls = d.error ? "why err" : traded ? "why traded" : "why";
+        const act = (d.action || "hold").toLowerCase();
+        const traded = d.outcome === "trade";
+        const whyCls = d.error || d.outcome === "rejected" ? "why err" : traded ? "why traded" : "why";
         const why = d.error ? `错误 ${String(d.error).slice(0, 40)}` : reasonText(d);
         const anim = newArrived && feed.page === 1 && i === 0 ? " anim-in" : "";
         return `<div class="frow${anim}">
@@ -637,14 +969,17 @@
         if (!p || p.side === "flat") return `<div class="num" style="color:var(--faint)">—</div>`;
         return `<div class="num ${clsPnl(p.unrealized_usd)}">${signedMoney(p.unrealized_usd)}</div>`;
       }).join("");
-      const realized = (a.positions || []).reduce((s, p) => s + (p.realized_usd || 0), 0);
+      const realized = a.realized_usd || 0;
       const pnl = a.pnl_usd || 0;
+      const eqCell = a.synced
+        ? `${money(a.equity)}<div style="font-size:11px;color:var(--muted)">${signedMoney(pnl)} · ${(a.pnl_pct || 0) >= 0 ? "+" : ""}${fmt(a.pnl_pct || 0, 2)}%</div>`
+        : `同步中`;
       $("book").style.setProperty("--m", markets.length);
       $("book").innerHTML = `
         <div class="book-head"><div></div>${heads}<div class="right">净值</div></div>
         <div class="book-row">
           <div class="lab">仓位</div>${chips}
-          <div class="num right ${clsPnl(pnl)}">${money(a.equity)}<div style="font-size:11px;color:var(--muted)">${pnl >= 0 ? "+" : ""}${fmt(a.pnl_pct || 0, 4)}%</div></div>
+          <div class="num right ${a.synced ? clsPnl(pnl) : ""}">${eqCell}</div>
         </div>
         <div class="book-row">
           <div class="lab">浮动盈亏</div>${upnl}
@@ -653,8 +988,100 @@
     }
 
 
+    /* ---------- direction score breakdown ---------- */
+    function renderScore() {
+      const pol = state.policy || {};
+      const th = pol.dir_min ?? 8, slowMin = pol.slow_min ?? 1.5;
+      const R = th * 2;
+      const at = (v) => 50 + Math.max(-R, Math.min(R, v)) / R * 50;
+      setText("scoreMeta", `门槛 ±${fmt(th, 0)}`);
+      setText("scoreRule", `趋势须同向 ≥${fmt(slowMin, 1)} · 模型反向 ≥${fmt((pol.model_veto || 0) * 100, 0)}% 否决`);
+      const bySym = Object.fromEntries(((state.account || {}).positions || []).map(p => [p.symbol, p]));
+      const maxLots = pol.allow_add ? 1 + (pol.max_adds || 0) : 1;
+      const unit = state.trade_notional_usd || 0;
+      $("scores").innerHTML = (state.markets || []).map(sym => {
+        const d = state.lastScore[sym];
+        const p = bySym[sym];
+        const lots = p && p.side !== "flat" && unit > 0 && p.entry > 0
+          ? Math.max(1, Math.round(Math.abs(p.size) * p.entry / unit)) : 0;
+        const pos = lots ? `${p.side === "long" ? "多" : "空"} ${lots}/${maxLots} 笔` : "空仓";
+        if (!d) return `<div class="srow"><div class="lab">${esc(sym)}</div><div class="empty" style="padding:4px 0">等待第一轮评分</div></div>`;
+        const s = d.score, parts = d.score_parts || {};
+        const slow = (parts.ret_5m || 0) + (parts.ret_1h || 0);
+        const side = s >= th ? "buy" : s <= -th ? "sell" : "";
+        const trendOk = side === "buy" ? slow >= slowMin : slow <= -slowMin;
+        const verdict = side
+          ? `${side === "buy" ? "做多" : "做空"}信号${trendOk ? "" : " · 趋势未确认"}`
+          : `距${s >= 0 ? "做多" : "做空"}还差 ${fmt(Math.max(0.1, Math.ceil((th - Math.abs(s)) * 10 - 1e-9) / 10), 1)}`;
+        const why = d.reason === "trend_conflict" || d.reason === "score_flat" ? "" : reasonLabel(d);
+        const lo = Math.min(50, at(s)), hi = Math.max(50, at(s));
+        const cell = (label, v, tip, min = 0) =>
+          `<span title="${esc(tip)}">${label}<b class="${dirCls(v, min)}">${signed(v, 2)}</b></span>`;
+        const text = `${verdict}${why ? " · " + why : ""}`;
+        return `<div class="srow">
+          <div class="lab">${esc(sym)}</div>
+          <div class="sv ${side ? dirCls(s) : ""}">${scoreText(s)}</div>
+          <div class="sbar">
+            <i class="fill ${side}" style="left:${lo.toFixed(2)}%;width:${(hi - lo).toFixed(2)}%"></i>
+            <i class="mark" style="left:${at(-th)}%"></i><i class="mark zero" style="left:50%"></i><i class="mark" style="left:${at(th)}%"></i>
+          </div>
+          <div class="verdict" title="${esc(text)}">${esc(text)}</div>
+          <div class="lots">${pos}</div>
+          <div class="sparts">
+            ${cell("5分钟", parts.ret_5m, "5 分钟涨跌 bps ÷ 8")}
+            ${cell("1小时", parts.ret_1h, "1 小时涨跌 bps ÷ 20")}
+            ${cell("盘口", parts.book, "买卖挂单不平衡 × 15，封顶 ±6")}
+            ${cell("主动成交", parts.flow, "主动买卖净额，封顶 ±6")}
+            ${cell(`趋势(需同向 ±${fmt(slowMin, 1)})`, slow, "5分钟 + 1小时两项之和，开仓须与方向一致", slowMin)}
+          </div>
+        </div>`;
+      }).join("");
+      $("scoreAxis").innerHTML = [-R, -th, 0, th, R].map(v =>
+        `<span style="left:${at(v)}%">${v > 0 ? "+" : ""}${fmt(v, 0)}${v === th ? " 做多" : v === -th ? " 做空" : ""}</span>`).join("");
+    }
+
+    /* ---------- order log ---------- */
+    function renderOrders() {
+      const all = state.orders.slice().reverse();
+      const total = all.length;
+      const pages = Math.max(1, Math.ceil(total / ORDER_PAGE));
+      if (olog.page > pages) olog.page = pages;
+      const mix = { open: 0, add: 0, exit: 0 };
+      for (const o of all) { const g = orderKind(o).group; mix[g === "risk" ? "exit" : g] += 1; }
+      setText("ordCount", total);
+      setText("ordMix", total ? `开仓 ${mix.open} · 加仓 ${mix.add} · 平仓 ${mix.exit}` : "开仓、加仓、平仓都记在这里");
+      const startIdx = (olog.page - 1) * ORDER_PAGE;
+      const html = all.slice(startIdx, startIdx + ORDER_PAGE).map(o => {
+        const act = (o.action || "").toLowerCase();
+        const k = orderKind(o);
+        const ok = o.status === "filled" || o.status === "sent";
+        const st = o.status === "filled" ? "已成交" : ok ? "已提交" : "失败";
+        const px = o.price || 0;
+        return `<div class="frow">
+          <div class="t num">${stamp(o.ts_ms)}</div>
+          <div>${esc(o.symbol)}</div>
+          <div class="act ${act}">${act.toUpperCase()}</div>
+          <div class="kind ${k.group}">${k.label}</div>
+          <div class="num right">${fmt(o.size, (o.size || 0) < 0.01 ? 5 : 4)}</div>
+          <div class="num right">${fmt(px, px >= 1000 ? 1 : 2)}</div>
+          <div class="num right">${money((o.size || 0) * px)}</div>
+          <div class="st ${ok ? "" : "err"}" title="${ok ? "交易所已接收" : "下单失败"}">${st}</div>
+        </div>`;
+      });
+      for (let i = html.length; i < ORDER_PAGE; i++) html.push(`<div class="frow blank"></div>`);
+      if (!total) html[0] = `<div class="frow blank"><div class="empty" style="grid-column:1/-1">还没有下单。开仓、加仓、平仓和止损止盈都会记在这里。</div></div>`;
+      $("orders").innerHTML = html.join("");
+      setText("oNum", `${olog.page} / ${pages}`);
+      $("oFirst").disabled = $("oPrev").disabled = olog.page <= 1;
+      $("oNext").disabled = olog.page >= pages;
+    }
+    $("oFirst").onclick = () => { olog.page = 1; renderOrders(); };
+    $("oPrev").onclick = () => { olog.page = Math.max(1, olog.page - 1); renderOrders(); };
+    $("oNext").onclick = () => { olog.page += 1; renderOrders(); };
+
     function renderAll() {
-      renderConfig(); renderStatus(); renderKpis(); renderWall(); renderChart(); renderNow(); renderFeed(false); renderBook();
+      renderConfig(); renderStatus(); renderKpis(); renderWall(); renderChart(); renderScore(); renderOrders();
+      renderNow(); renderFeed(false); renderBook();
     }
 
     /* ---------- state ingestion ---------- */
@@ -665,14 +1092,20 @@
         backend: s.backend || "", markets: s.markets || state.markets,
         loop_seconds: s.loop_seconds ?? state.loop_seconds, min_confidence: s.min_confidence ?? 0.58,
         max_position_usd: s.max_position_usd ?? state.max_position_usd,
+        trade_notional_usd: s.trade_notional_usd ?? state.trade_notional_usd,
         tickers: s.tickers || state.tickers, account: s.account || state.account,
         cycles: s.cycles || state.cycles, equity_curve: s.equity_curve || state.equity_curve,
-        stats: s.stats || state.stats, best_round: s.best_round, worst_round: s.worst_round,
+        curve_rev: s.curve_rev ?? state.curve_rev, policy: s.policy || state.policy,
+        stats: s.stats || state.stats,
         orders: s.orders || state.orders,
         decisions: s.decisions || state.decisions,
       });
       state.lastBySymbol = {};
-      for (const d of state.decisions) if (d.symbol) state.lastBySymbol[d.symbol] = d;
+      for (const d of state.decisions) {
+        if (!d.symbol) continue;
+        state.lastBySymbol[d.symbol] = d;
+        if (hasScore(d)) state.lastScore[d.symbol] = d;
+      }
       renderAll();
     }
 
@@ -683,13 +1116,16 @@
         case "ticker":
           state.tickers[data.symbol] = data; renderPrice(data.symbol); break;
         case "account":
-          state.account = data; renderKpis(); renderBook(); break;
+          state.account = data; renderKpis(); renderBook(); renderScore(); break;
         case "status":
           state.running = !!data.running; renderStatus(); break;
         case "decision": {
           state.decisions.push(data);
           if (state.decisions.length > KEEP_DECISIONS) state.decisions = state.decisions.slice(-KEEP_DECISIONS);
-          if (data.symbol) state.lastBySymbol[data.symbol] = data;
+          if (data.symbol) {
+            state.lastBySymbol[data.symbol] = data;
+            if (hasScore(data)) state.lastScore[data.symbol] = data;
+          }
           const st = state.stats || (state.stats = {});
           if (!data.error) {
             const a = (data.action || "").toLowerCase();
@@ -699,18 +1135,30 @@
             st.n_decisions = (st.n_buy || 0) + (st.n_sell || 0) + (st.n_hold || 0);
           }
           if (data.outcome === "trade") st.n_orders = (st.n_orders || 0) + 1;
-          renderNow(); renderFeed(true); renderKpis(); flashNowRow(data.symbol);
+          renderNow(); renderFeed(true); renderKpis(); renderScore(); flashNowRow(data.symbol);
           break;
         }
-        case "order": case "fill":
-          state.orders.push(data); break;
-        case "cycle":
-          state.cycles.push(data);
+        case "order":
+          // a filled order also arrives as "fill"; count it once
+          state.orders.push(data);
+          if (state.orders.length > KEEP_ORDERS) state.orders = state.orders.slice(-KEEP_ORDERS);
+          renderOrders();
+          break;
+        case "cycle": {
+          state.cycles.push({ ts_ms: data.ts_ms, results: data.results || [] });
           if (state.cycles.length > 400) state.cycles = state.cycles.slice(-400);
           if (data.account) state.account = data.account;
-          renderKpis(); renderWall(); renderBook();
-          resync();   // pulls equity curve point, best/worst round, server-side stats
+          if (data.stats) state.stats = data.stats;
+          if (data.point) {
+            // the server thinned or reloaded its curve: take the whole thing again
+            if (data.curve_rev !== state.curve_rev) { resync(); break; }
+            const pts = state.equity_curve;
+            if (data.curve_append || !pts.length) pts.push(data.point);
+            else pts[pts.length - 1] = data.point;
+          }
+          renderKpis(); renderWall(); renderBook(); renderChart(); renderScore();
           break;
+        }
         case "error":
           break;
       }
@@ -752,6 +1200,23 @@
         renderElapsed();
       }
     }, 1000);
+
+    /* ---------- theme ---------- */
+    function applyTheme(t) {
+      const dark = t === "dark";
+      if (dark) document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+      document.querySelector('meta[name="theme-color"]').content = dark ? "#0a0d13" : "#f4f6fa";
+      document.querySelectorAll("[data-theme-set]").forEach(b =>
+        b.setAttribute("aria-pressed", String(b.dataset.themeSet === (dark ? "dark" : "light"))));
+    }
+    document.querySelectorAll("[data-theme-set]").forEach(b => {
+      b.onclick = () => {
+        try { localStorage.setItem("theme", b.dataset.themeSet); } catch {}
+        applyTheme(b.dataset.themeSet);
+      };
+    });
+    applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
     setText("clock", hms());
     boot();

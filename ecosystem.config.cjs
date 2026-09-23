@@ -9,6 +9,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 30,
       min_uptime: "5s",
+      kill_timeout: 8000,
       env: {
         PYTHONUNBUFFERED: "1",
       },

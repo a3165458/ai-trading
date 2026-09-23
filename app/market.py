@@ -44,6 +44,54 @@ def _f(v: Any) -> float | None:
     except (TypeError, ValueError):
         return None
 
+CANDLE_MS = 5 * 60 * 1000
+
+
+def candle_points(rows: list[Any]) -> list[tuple[int, float]]:
+    out: list[tuple[int, float]] = []
+    for c in rows:
+        if not isinstance(c, dict):
+            continue
+        close = _f(c.get("c") if c.get("c") is not None else c.get("close"))
+        ts = _f(c.get("t") if c.get("t") is not None else c.get("timestamp"))
+        if close is None or ts is None:
+            continue
+        out.append((int(ts), close))
+    return out
+
+
+def merge_candles(
+    prev: list[tuple[int, float]],
+    points: list[tuple[int, float]],
+    *,
+    replace: bool,
+    limit: int = 60,
+) -> list[tuple[int, float]]:
+    """Keep one close per candle timestamp. A repeat timestamp replaces the forming bar."""
+    base = [] if replace or not prev else [(int(ts), float(close)) for ts, close in prev]
+    by = {ts: close for ts, close in base}
+    for ts, close in points:
+        by[int(ts)] = float(close)
+    ordered = sorted(by)
+    return [(ts, by[ts]) for ts in ordered][-limit:]
+
+
+def marked_closes(series: list[tuple[int, float]], mid: float, now_ms: int) -> list[float]:
+    pts = [(int(ts), float(close)) for ts, close in series]
+    if mid and mid > 0:
+        current = (int(now_ms) // CANDLE_MS) * CANDLE_MS
+        if pts and pts[-1][0] == current:
+            pts[-1] = (current, float(mid))
+        elif not pts or pts[-1][0] < current:
+            pts.append((current, float(mid)))
+    return [px for _, px in pts]
+
+
+def ret_bps(closes: list[float], n: int) -> float | None:
+    if len(closes) < n + 1 or closes[-1 - n] == 0:
+        return None
+    return (closes[-1] / closes[-1 - n] - 1) * 10_000
+
 
 class LighterMarket:
     def __init__(
@@ -62,7 +110,10 @@ class LighterMarket:
         self._books: dict[int, dict[str, list[dict[str, str]]]] = {}
         self._stats: dict[int, dict[str, Any]] = {}
         self._trades: dict[int, deque[dict[str, Any]]] = {}
-        self._closes: dict[int, list[float]] = {}
+        self._closes: dict[int, list[tuple[int, float]]] = {}
+        self._mids: dict[int, deque[tuple[float, float]]] = {}
+        self._candle_try: dict[int, float] = {}
+        self._http: Any = None
         self._positions: dict[str, dict[str, Any]] = {}
         self._user_stats: dict[str, Any] = {}
         self._collateral: str | None = None
@@ -83,6 +134,10 @@ class LighterMarket:
             except (asyncio.CancelledError, Exception):
                 pass
         self._task = None
+        http = self._http
+        self._http = None
+        if http is not None:
+            await http.aclose()
 
     async def _ensure(self) -> None:
         if self._task is None or self._task.done():
@@ -211,24 +266,16 @@ class LighterMarket:
 
     def _on_candles(self, msg: dict[str, Any]) -> None:
         mid = int(_channel_id(msg.get("channel")))
-        rows = msg.get("candles") or []
+        rows = list(msg.get("candles") or [])
         candle = msg.get("candle")
         if candle:
-            rows = rows + [candle]
-        closes: list[float] = []
-        for c in rows:
-            if not isinstance(c, dict):
-                continue
-            v = _f(c.get("c") if c.get("c") is not None else c.get("close"))
-            if v is not None:
-                closes.append(v)
-        if typ_full := str(msg.get("type") or ""):
-            if typ_full.startswith("subscribed") and closes:
-                self._closes[mid] = closes[-60:]
-            elif closes:
-                prev = self._closes.setdefault(mid, [])
-                prev.extend(closes)
-                self._closes[mid] = prev[-60:]
+            rows.append(candle)
+        points = candle_points(rows)
+        if not points:
+            return
+        replace = str(msg.get("type") or "").startswith("subscribed")
+        prev = [] if replace else list(self._closes.get(mid) or [])
+        self._closes[mid] = merge_candles(prev, points, replace=replace)
 
     def _on_account(self, msg: dict[str, Any]) -> None:
         positions = msg.get("positions") or {}
@@ -269,6 +316,68 @@ class LighterMarket:
         if not data:
             raise RuntimeError("ws account not ready")
         return data
+
+    def _note_mid(self, market_id: int, mid: float) -> None:
+        if not mid:
+            return
+        now = time.time()
+        buf = self._mids.setdefault(market_id, deque(maxlen=8000))
+        if buf and now - buf[-1][0] < 1.0:
+            buf[-1] = (now, float(mid))
+        else:
+            buf.append((now, float(mid)))
+
+    def _tape_ret(self, market_id: int, seconds: float, mid: float) -> float | None:
+        buf = self._mids.get(market_id)
+        if not buf or not mid or buf[0][0] > time.time() - seconds + 20:
+            return None
+        target = time.time() - seconds
+        past = None
+        for ts, px in buf:
+            if ts >= target:
+                break
+            past = px
+        if not past:
+            return None
+        return (mid / past - 1) * 10_000
+
+    async def _ensure_history(self, market_id: int) -> None:
+        """REST backfill. The candle stream only pushes the forming 5m bar."""
+        series = self._closes.get(market_id) or []
+        if len(series) >= 48:
+            return
+        now = time.time()
+        if now - self._candle_try.get(market_id, 0.0) < 60:
+            return
+        self._candle_try[market_id] = now
+        end = int(now * 1000)
+        start = end - 8 * 3600 * 1000
+        try:
+            if self._http is None:
+                import httpx
+                self._http = httpx.AsyncClient(timeout=8)
+            r = await self._http.get(
+                f"{self.base}/api/v1/candles",
+                params={
+                    "market_id": market_id,
+                    "resolution": "5m",
+                    "start_timestamp": start,
+                    "end_timestamp": end,
+                    "count_back": 80,
+                },
+                headers={"accept": "application/json"},
+            )
+            if r.status_code != 200:
+                return
+            body = r.json()
+            rows = body.get("c") if isinstance(body, dict) else None
+            points = candle_points(rows or [])
+            if len(points) < 2:
+                return
+            current = list(self._closes.get(market_id) or [])
+            self._closes[market_id] = merge_candles(current, points, replace=False)
+        except Exception:
+            return
 
     async def snapshot(self, symbol: str) -> Snapshot:
         await self._ensure()
@@ -315,38 +424,43 @@ class LighterMarket:
 
         fund = _f(stats.get("current_funding_rate") if stats.get("current_funding_rate") is not None else stats.get("funding_rate"))
         daily = _f(stats.get("daily_price_change"))
-        closes = list(self._closes.get(m.market_id) or [])
-        if mid:
-            # keep a live tail for recent_mids even before candles land
-            if not closes or abs(closes[-1] - mid) > 1e-12:
-                closes = (closes + [mid])[-60:]
-
-        def ret_bps(n: int) -> float | None:
-            if len(closes) < n + 1 or closes[-1 - n] == 0:
-                return None
-            return (closes[-1] / closes[-1 - n] - 1) * 10_000
+        px = float(mid or 0)
+        self._note_mid(m.market_id, px)
+        await self._ensure_history(m.market_id)
+        now_ms = int(time.time() * 1000)
+        closes = marked_closes(self._closes.get(m.market_id) or [], px, now_ms)
+        r5 = ret_bps(closes, 1)
+        r1 = ret_bps(closes, 12)
+        r4 = ret_bps(closes, 48)
+        if r5 is None:
+            r5 = self._tape_ret(m.market_id, 300, px)
+        if r1 is None:
+            r1 = self._tape_ret(m.market_id, 3600, px)
+        if r4 is None:
+            r4 = self._tape_ret(m.market_id, 4 * 3600, px)
 
         return Snapshot(
             symbol=m.symbol,
             market_id=m.market_id,
-            mid=float(mid or 0),
+            mid=px,
             best_bid=best_bid,
             best_ask=best_ask,
             spread_bps=spread_bps,
             imbalance=imbalance,
-            last_trade=last_trade or float(mid or 0),
+            last_trade=last_trade or px,
             daily_change=daily,
             funding=fund,
-            ret_5m_bps=ret_bps(1),
-            ret_1h_bps=ret_bps(12),
-            ret_4h_bps=ret_bps(48),
+            ret_5m_bps=r5,
+            ret_1h_bps=r1,
+            ret_4h_bps=r4,
             cvd=cvd,
             trade_count=len(tlist),
             bids=bids,
             asks=asks,
             recent_mids=closes[-24:],
             meta=m,
-            ts_ms=int(time.time() * 1000),
+            ts_ms=now_ms,
+            mark_price=_f(stats.get("mark_price")),
         )
 
 

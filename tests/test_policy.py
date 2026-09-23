@@ -4,7 +4,10 @@ import unittest
 
 from app.executor import close_intent
 from app.model import SYSTEM_PROMPT
-from app.policy import Calibrator, StateContext, build_state, resolve, risk_exit
+from app.market import CANDLE_MS, marked_closes, merge_candles, ret_bps
+from app.policy import (
+    Calibrator, StateContext, apply_direction, build_state, direction_parts, position_layers, resolve, risk_exit,
+)
 from app.types import Position
 from tests.test_core import settings, snap
 
@@ -134,6 +137,130 @@ class RiskTests(unittest.TestCase):
         self.assertTrue(intent.reduce_only)
         self.assertAlmostEqual(intent.size, 0.00123)
         self.assertEqual(intent.reason, "stop_loss")
+
+
+class DirectionTests(unittest.TestCase):
+    def test_flat_buys_when_score_clears_even_if_model_is_hold(self):
+        s = snap(ret_5m_bps=80, ret_1h_bps=0, imbalance=0, cvd=0)
+        hold = {"buy": 0.002, "sell": 0.002, "hold": 0.996}
+        r = apply_direction(s, 0.0, settings(), hold)
+        self.assertEqual(r.action, "buy")
+        self.assertEqual(r.reason, "open")
+        self.assertGreaterEqual(r.confidence, 0.58)
+        self.assertGreater(r.score, 8)
+
+    def test_book_alone_cannot_open(self):
+        s = snap(ret_5m_bps=0, ret_1h_bps=0, imbalance=0.9, cvd=0)
+        parts = direction_parts(s)
+        self.assertAlmostEqual(parts["book"], 6.0)
+        r = apply_direction(s, 0.0, settings(), {"buy": 0, "sell": 0, "hold": 1})
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "score_flat")
+
+    def test_model_vetoes_only_the_opposite_side(self):
+        s = snap(ret_5m_bps=80, ret_1h_bps=0, imbalance=0, cvd=0)
+        r = apply_direction(s, 0.0, settings(), {"buy": 0.1, "sell": 0.6, "hold": 0.3})
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "model_veto")
+
+    def test_same_side_does_not_add_when_off(self):
+        s = snap(ret_5m_bps=80, ret_1h_bps=0, imbalance=0, cvd=0)
+        r = apply_direction(s, 0.001, settings(), {"buy": 0, "sell": 0, "hold": 1})
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "add_off")
+
+    def test_trend_conflict_while_holding_is_not_labelled_keep(self):
+        s = snap(mid=20_000, cvd=-5, ret_5m_bps=0, ret_1h_bps=40, imbalance=-1)
+        r = apply_direction(s, 0.001, settings(), {"buy": 0, "sell": 0, "hold": 1})
+        self.assertLess(r.score, -8)
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "trend_conflict")
+
+    def test_opposite_score_flattens_short_with_a_buy(self):
+        s = snap(ret_5m_bps=80, ret_1h_bps=0, imbalance=0, cvd=0)
+        r = apply_direction(s, -0.01, settings(), {"buy": 0.01, "sell": 0.2, "hold": 0.79})
+        self.assertEqual(r.action, "buy")
+        self.assertEqual(r.reason, "exit_short")
+
+    def test_cvd_is_scaled_in_dollars(self):
+        btc = direction_parts(snap(mid=100, cvd=2, ret_5m_bps=0, ret_1h_bps=0, imbalance=0))
+        eth = direction_parts(snap(mid=10_000, cvd=2, ret_5m_bps=0, ret_1h_bps=0, imbalance=0))
+        self.assertLess(abs(btc["flow"]), 1)
+        self.assertAlmostEqual(eth["flow"], 6.0)
+
+    def test_microstructure_cannot_fade_the_slower_return(self):
+        s = snap(mid=20_000, cvd=5, ret_5m_bps=0, ret_1h_bps=-40, imbalance=1)
+        r = apply_direction(s, 0.0, settings(), {"buy": 0, "sell": 0, "hold": 1})
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "trend_conflict")
+        self.assertGreater(r.score, 8)
+
+
+class AddTests(unittest.TestCase):
+    HOLD = {"buy": 0, "sell": 0, "hold": 1}
+
+    def _buy_signal(self):
+        return snap(ret_5m_bps=80, ret_1h_bps=0, imbalance=0, cvd=0)
+
+    def _on(self, **kw):
+        return settings(**{"allow_add": True, "max_adds": 2, "add_cooldown_seconds": 120, "add_min_pnl_bps": 0, **kw})
+
+    def test_adds_one_lot_to_a_winner(self):
+        r = apply_direction(self._buy_signal(), 0.25, self._on(), self.HOLD, entry=99.5, since_order=300)
+        self.assertEqual(r.action, "buy")
+        self.assertEqual(r.reason, "add_long")
+
+    def test_short_adds_on_sell_signal(self):
+        s = snap(ret_5m_bps=-80, ret_1h_bps=0, imbalance=0, cvd=0)
+        r = apply_direction(s, -0.25, self._on(), self.HOLD, entry=100.5, since_order=300)
+        self.assertEqual(r.action, "sell")
+        self.assertEqual(r.reason, "add_short")
+
+    def test_stops_at_max_lots(self):
+        r = apply_direction(self._buy_signal(), 0.75, self._on(), self.HOLD, entry=99.5, since_order=300)
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "add_max")
+        r = apply_direction(self._buy_signal(), 0.5, self._on(), self.HOLD, entry=99.5, since_order=300)
+        self.assertEqual(r.reason, "add_long")
+
+    def test_waits_between_orders(self):
+        r = apply_direction(self._buy_signal(), 0.25, self._on(), self.HOLD, entry=99.5, since_order=30)
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "add_wait")
+
+    def test_does_not_average_down(self):
+        r = apply_direction(self._buy_signal(), 0.25, self._on(), self.HOLD, entry=101, since_order=300)
+        self.assertEqual(r.action, "hold")
+        self.assertEqual(r.reason, "add_underwater")
+        r = apply_direction(self._buy_signal(), 0.25, self._on(add_min_pnl_bps=-200), self.HOLD, entry=101, since_order=300)
+        self.assertEqual(r.reason, "add_long")
+
+    def test_model_veto_blocks_an_add(self):
+        r = apply_direction(self._buy_signal(), 0.25, self._on(), {"buy": 0.1, "sell": 0.6, "hold": 0.3}, entry=99.5)
+        self.assertEqual(r.reason, "model_veto")
+
+    def test_layers_from_cost_basis(self):
+        self.assertEqual(position_layers(0.0, 0.0, 25), 0)
+        self.assertEqual(position_layers(-0.00029, 86070.0, 25), 1)
+        self.assertEqual(position_layers(0.0182, 2739.0, 25), 2)
+        self.assertEqual(position_layers(0.0001, 86000.0, 25), 1)
+
+
+class CandleTests(unittest.TestCase):
+    def test_repeat_timestamp_replaces_the_forming_bar(self):
+        series = []
+        for close in (10, 11, 12):
+            series = merge_candles(series, [(1_000, close)], replace=False)
+        self.assertEqual(series, [(1000, 12.0)])
+        series = merge_candles(series, [(1_000 + CANDLE_MS, 13)], replace=False)
+        self.assertEqual(series, [(1000, 12.0), (1000 + CANDLE_MS, 13.0)])
+
+    def test_marked_close_is_the_five_minute_return(self):
+        series = [(i * CANDLE_MS, 100.0) for i in range(5)]
+        closes = marked_closes(series, 110.0, 4 * CANDLE_MS + 10)
+        self.assertEqual(len(closes), 5)
+        self.assertEqual(closes[-1], 110.0)
+        self.assertAlmostEqual(ret_bps(closes, 1), 1000.0)
 
 
 if __name__ == "__main__":

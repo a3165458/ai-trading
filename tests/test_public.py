@@ -23,6 +23,19 @@ class PublicPayloadTests(unittest.TestCase):
         self.assertEqual(out["orders"][0]["status"], "sent")
         self.assertNotIn("tx_hash", out["orders"][0])
 
+    def test_error_events_hide_exception_details(self):
+        detail = "request failed: token=synthetic-secret account=synthetic-account"
+        out = public_payload([
+            {"event": "error", "ts_ms": 123, "message": detail},
+            {"event": "order", "symbol": "BTC", "ERROR": detail},
+            {"event": "status", "message": "connected"},
+        ])
+        self.assertNotIn(detail, str(out))
+        self.assertEqual(out[0]["event"], "error")
+        self.assertEqual(out[0]["ts_ms"], 123)
+        self.assertEqual(out[1]["symbol"], "BTC")
+        self.assertEqual(out[2]["message"], "connected")
+
 
 if __name__ == "__main__":
     unittest.main()

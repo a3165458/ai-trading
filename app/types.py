@@ -54,6 +54,7 @@ class Snapshot:
     recent_mids: list[float]
     meta: MarketMeta
     ts_ms: int
+    mark_price: float | None = None
 
     def state_text(self, position: dict[str, Any], allowed: dict[str, bool]) -> str:
         bids = ", ".join(f"{b.price}x{b.size}" for b in self.bids[:5])

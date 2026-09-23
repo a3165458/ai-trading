@@ -37,7 +37,7 @@ def settings(**kw) -> Settings:
 
 def snap(mid=100.0, **kw) -> Snapshot:
     meta = MarketMeta("BTC", 1, 5, 1, 0.00007, 10.0)
-    return Snapshot(
+    base = dict(
         symbol="BTC",
         market_id=1,
         mid=mid,
@@ -58,8 +58,14 @@ def snap(mid=100.0, **kw) -> Snapshot:
         recent_mids=[mid],
         meta=meta,
         ts_ms=0,
-        **kw,
     )
+    base.update(kw)
+    if "mid" in kw:
+        mid = kw["mid"]
+        base["best_bid"] = kw.get("best_bid", mid - 0.1)
+        base["best_ask"] = kw.get("best_ask", mid + 0.1)
+        base["last_trade"] = kw.get("last_trade", mid)
+    return Snapshot(**base)
 
 
 class AccountingTests(unittest.TestCase):
@@ -293,6 +299,83 @@ class ExchangeAccountTests(unittest.TestCase):
         pub = a.as_public()
         self.assertAlmostEqual(pub["unrealized_usd"], u, places=4)
         self.assertAlmostEqual(pub["pnl_usd"], u, places=4)
+
+    def test_live_account_is_not_synced_until_collateral(self):
+        a = PaperAccount(10_000, ["BTC"], live=True)
+        self.assertFalse(a.synced)
+        self.assertEqual(a.equity(), 0.0)
+        a.apply_exchange({"accounts": [{"available_balance": "200", "positions": []}]})
+        self.assertFalse(a.synced)
+        a.apply_exchange({"accounts": [{"collateral": "213.45", "available_balance": "211", "positions": []}]})
+        self.assertTrue(a.synced)
+        self.assertAlmostEqual(a.start_equity, 213.45)
+        self.assertIsNotNone(a.start_ts_ms)
+
+    def test_realized_is_collateral_change_since_baseline(self):
+        a = PaperAccount(10_000, ["BTC"], live=True)
+        a.apply_exchange({"accounts": [{"collateral": "213.50", "positions": []}]})
+        a.apply_exchange({"accounts": [{
+            "collateral": "213.40",
+            "positions": [{"symbol": "BTC", "sign": -1, "position": "0.001", "avg_entry_price": "86000", "realized_pnl": "0"}],
+        }]})
+        a.mark("BTC", 85900)
+        pub = a.as_public()
+        self.assertAlmostEqual(pub["realized_usd"], -0.10, places=6)
+        self.assertAlmostEqual(pub["unrealized_usd"], 0.10, places=6)
+        self.assertAlmostEqual(pub["pnl_usd"], pub["realized_usd"] + pub["unrealized_usd"], places=6)
+        self.assertAlmostEqual(pub["pnl_usd"], a.equity() - a.start_equity, places=6)
+
+    def test_restored_baseline_survives_first_sync(self):
+        a = PaperAccount(10_000, ["BTC"], live=True)
+        a.set_baseline(250.0, 123)
+        a.apply_exchange({"accounts": [{"collateral": "213.45", "positions": []}]})
+        self.assertAlmostEqual(a.start_equity, 250.0)
+        self.assertEqual(a.start_ts_ms, 123)
+        self.assertAlmostEqual(a.as_public()["pnl_usd"], 213.45 - 250.0, places=6)
+
+
+class CurveTests(unittest.TestCase):
+    def test_tail_is_replaced_inside_the_step(self):
+        from app.curve import EquityCurve
+        c = EquityCurve(limit=100, step_ms=1000)
+        self.assertTrue(c.add({"ts_ms": 0, "equity": 1}))
+        self.assertTrue(c.add({"ts_ms": 100, "equity": 2}))
+        self.assertFalse(c.add({"ts_ms": 500, "equity": 3}))
+        self.assertEqual([p["equity"] for p in c.points], [1, 3])
+        self.assertTrue(c.add({"ts_ms": 1200, "equity": 4}))
+        self.assertEqual([p["equity"] for p in c.points], [1, 3, 4])
+
+    def test_overflow_thins_and_keeps_both_ends(self):
+        from app.curve import EquityCurve
+        c = EquityCurve(limit=10, step_ms=1)
+        for i in range(11):
+            c.add({"ts_ms": i * 10, "equity": i})
+        self.assertLessEqual(len(c.points), 10)
+        self.assertEqual(c.points[0]["equity"], 0)
+        self.assertEqual(c.points[-1]["equity"], 10)
+        self.assertEqual(c.step_ms, 2)
+        self.assertEqual(c.rev, 1)
+
+    def test_load_sorts_and_drops_bad_points(self):
+        from app.curve import EquityCurve
+        c = EquityCurve(limit=10, step_ms=1000)
+        c.load({"step_ms": 4000, "points": [{"ts_ms": 2, "equity": 2}, {"ts_ms": 1, "equity": 1}, {"equity": 9}]})
+        self.assertEqual([p["ts_ms"] for p in c.points], [1, 2])
+        self.assertEqual(c.step_ms, 4000)
+
+
+class OrderLogTests(unittest.TestCase):
+    def test_saved_order_drops_tx_hash_and_model_output(self):
+        from app.engine import order_record
+        rec = order_record({
+            "id": "7", "ts_ms": 1, "symbol": "ETH", "action": "sell", "size": 0.0091, "price": 2731.5,
+            "status": "sent", "mode": "live", "filled": True, "reduce_only": False, "reason": "add_short",
+            "error": None, "tx_hash": "0xabc", "probabilities": {"sell": 0.9}, "confidence": 0.8,
+        })
+        self.assertNotIn("tx_hash", rec)
+        self.assertNotIn("probabilities", rec)
+        self.assertEqual(rec["reason"], "add_short")
+        self.assertEqual(rec["size"], 0.0091)
 
 
 class BookMergeTests(unittest.TestCase):

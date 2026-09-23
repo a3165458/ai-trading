@@ -90,13 +90,27 @@ def apply_fill(pos: Position, action: Action, qty: float, price: float) -> float
 
 
 class PaperAccount:
-    def __init__(self, equity: float, symbols: list[str]):
-        self.cash = equity
-        self.available = equity
-        self.start_equity = equity
+    """Cash is settled collateral; equity adds floating PnL at the mark.
+
+    `start_equity` is the collateral baseline. Everything settled since then
+    (closed-trade PnL, fees, funding) is `cash - start_equity`, so
+    pnl = realized + unrealized = equity - start_equity.
+    """
+
+    def __init__(self, equity: float, symbols: list[str], *, live: bool = False):
+        self.cash = 0.0 if live else equity
+        self.available = self.cash
+        self.start_equity = self.cash
+        self.start_ts_ms: int | None = None if live else int(time.time() * 1000)
+        self.synced = not live
         self.positions = {s: Position(s) for s in symbols}
         self.marks: dict[str, float] = {}
         self._start_locked = False
+
+    def set_baseline(self, start_equity: float, start_ts_ms: int | None) -> None:
+        self.start_equity = float(start_equity)
+        self.start_ts_ms = start_ts_ms
+        self._start_locked = True
 
     def mark(self, symbol: str, mid: float) -> None:
         self.marks[symbol] = mid
@@ -112,9 +126,9 @@ class PaperAccount:
             "entry": p.entry,
             "mid": mid,
             "unrealized_usd": round(u, 4),
-            "realized_usd": round(p.realized, 4),
             "notional_usd": round(abs(p.size) * mid, 4) if mid else 0.0,
         }
+
     def _unrealized(self) -> float:
         u = 0.0
         for s, p in self.positions.items():
@@ -128,14 +142,16 @@ class PaperAccount:
 
     def as_public(self) -> dict:
         u = self._unrealized()
-        r = sum(p.realized for p in self.positions.values())
+        r = self.cash - self.start_equity
         pnl = u + r
-        den = self.cash or self.start_equity
+        den = self.start_equity
         return {
+            "synced": self.synced,
             "equity": round(self.equity(), 4),
             "cash": round(self.cash, 4),
             "available": round(self.available, 4),
-            "start_equity": self.start_equity,
+            "start_equity": round(self.start_equity, 4),
+            "start_ts_ms": self.start_ts_ms,
             "unrealized_usd": round(u, 4),
             "realized_usd": round(r, 4),
             "pnl_usd": round(pnl, 4),
@@ -147,17 +163,12 @@ class PaperAccount:
         acct = _pick_account(body)
         if not acct:
             return
-        # collateral = total USDC. available_balance drops when margin is locked — that is not PnL.
+        # collateral = settled USDC. available_balance drops when margin is locked — that is not PnL.
         total = _num(acct.get("collateral"))
         free = _num(acct.get("available_balance"))
         if total is not None:
             self.cash = total
-        elif free is not None:
-            self.cash = free
-        if free is not None:
-            self.available = free
-        elif total is not None:
-            self.available = total
+            self.available = free if free is not None else total
         seen: set[str] = set()
         raw_pos = acct.get("positions")
         if isinstance(raw_pos, dict):
@@ -175,21 +186,20 @@ class PaperAccount:
                 sign = 1
             size = qty * (1 if sign >= 0 else -1)
             entry = _num(row.get("avg_entry_price")) or 0.0
-            realized = _num(row.get("realized_pnl")) or 0.0
             p = self.positions[sym]
             p.size = size if qty else 0.0
             p.entry = entry if p.size else 0.0
-            p.realized = realized
-            mid = _num(row.get("mark_price"))
-            if mid:
-                self.marks[sym] = mid
         for sym, p in self.positions.items():
             if sym not in seen:
                 p.size = 0.0
                 p.entry = 0.0
+        # Lighter resets per-position realized_pnl on close, so realized is tracked
+        # from collateral against the baseline instead.
+        if total is None:
+            return
+        self.synced = True
         if not self._start_locked:
-            self.start_equity = self.equity()
-            self._start_locked = True
+            self.set_baseline(self.cash, int(time.time() * 1000))
 
 
 class PaperExecutor:

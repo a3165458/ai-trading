@@ -17,6 +17,7 @@ from app.model import build_model
 from app.public import public_payload
 
 WEB = Path(__file__).resolve().parent.parent / "web"
+DATA = Path(__file__).resolve().parent.parent / "data"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,9 +30,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         api_key_index=settings.lighter_api_key_index,
     )
     model = build_model(settings)
-    account = PaperAccount(settings.paper_equity_usd, settings.markets)
+    account = PaperAccount(settings.paper_equity_usd, settings.markets, live=settings.live)
     executor = build_executor(settings, account)
-    engine = Engine(settings, market, model, executor, account, hub)
+    store = DATA / "equity-live.json" if settings.live else None
+    engine = Engine(settings, market, model, executor, account, hub, store_path=store)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -102,4 +104,6 @@ app = create_app()
 def run() -> None:
     import uvicorn
     settings = app.state.settings
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+    # open /api/events streams would otherwise hold shutdown past PM2's kill timeout,
+    # and the engine's final save would never run
+    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info", timeout_graceful_shutdown=2)

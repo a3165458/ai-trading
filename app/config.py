@@ -77,6 +77,11 @@ class Settings:
     fee_bps: float = 2.0
     debias: bool = True
     debias_strength: float = 0.5
+    dir_min: float = 8.0
+    model_veto: float = 0.55
+    max_adds: int = 2
+    add_cooldown_seconds: float = 120.0
+    add_min_pnl_bps: float = 0.0
 
     @property
     def live(self) -> bool:
@@ -152,6 +157,11 @@ def load_settings() -> Settings:
         fee_bps=_f("FEE_BPS", 2.0),
         debias=_b("DEBIAS", True),
         debias_strength=_f("DEBIAS_STRENGTH", 0.5),
+        dir_min=_f("DIR_MIN", 8.0),
+        model_veto=_f("MODEL_VETO", 0.55),
+        max_adds=max(0, _i("MAX_ADDS", 2)),
+        add_cooldown_seconds=_f("ADD_COOLDOWN_SECONDS", 120.0),
+        add_min_pnl_bps=_f("ADD_MIN_PNL_BPS", 0.0),
     )
     resolved = settings.resolved_backend
     if resolved == "thisthat" and not settings.openai_base_url:
