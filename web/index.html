@@ -363,6 +363,22 @@
     .conn.bad { background: var(--loss); animation: blink 1s ease-in-out infinite; }
     @keyframes blink { 50% { opacity: 0.25; } }
 
+    /* footer links */
+    .foot {
+      max-width: 1760px; margin: 0 auto; padding: 14px 28px 10px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px 22px;
+      font-size: 12px; color: var(--muted);
+    }
+    .foot > span { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; }
+    .foot .fk { color: var(--faint); flex: none; }
+    .foot a {
+      display: inline-flex; align-items: baseline; gap: 5px; color: var(--text-2); text-decoration: none;
+      border-bottom: 1px dashed var(--line-2); padding-bottom: 1px; overflow-wrap: anywhere;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .foot a:hover { color: var(--accent); border-color: var(--accent); }
+    .foot a .num { font-size: 11.5px; }
+
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
     @media (max-width: 1100px) {
       .kpis { grid-template-columns: 1fr 1fr; }
@@ -372,6 +388,7 @@
     }
     @media (max-width: 700px) {
       header, .layout, .kpis { padding-left: 14px; padding-right: 14px; }
+      .foot { padding-left: 14px; padding-right: 14px; gap: 4px 14px; }
       .brand h1 { font-size: 19px; }
       .kpi { min-height: 0; padding: 12px 14px; }
       .kpi .v { font-size: 22px; }
@@ -568,6 +585,17 @@
     </div>
   </main>
 
+  <footer class="foot">
+    <span id="footWallet" hidden>
+      <span class="fk">实盘账户</span>
+      <a id="footWalletLink" href="#" target="_blank" rel="noopener noreferrer"><span class="num" id="footWalletAddr"></span><span aria-hidden="true">↗</span></a>
+    </span>
+    <span>
+      <span class="fk">开源仓库</span>
+      <a id="footRepoLink" href="#" target="_blank" rel="noopener noreferrer"><span id="footRepoText">GitHub</span><span aria-hidden="true">↗</span></a>
+    </span>
+  </footer>
+
   <div class="statusbar">
     <span><i class="conn" id="conn"></i><span id="connText">连接中</span></span>
     <span>最后事件 <span class="num" id="lastEvt">—</span> · 事件流 /api/events</span>
@@ -584,6 +612,7 @@
     const state = {
       running: false, mode: "paper", model: "mock", backend: "",
       markets: ["BTC", "ETH"], loop_seconds: 20, min_confidence: 0.58, max_position_usd: null,
+      links: { wallet: "", explorer: "", repo: "" },
       tickers: {}, prevMid: {}, account: null, cycles: [], equity_curve: [], curve_rev: null,
       stats: {}, policy: {}, orders: [],
       decisions: [], lastBySymbol: {}, lastScore: {},
@@ -697,6 +726,30 @@
       setText("metaBackend", state.backend || "mock");
       setText("axisN", WALL_SLOTS);
       $("prices").style.setProperty("--m", (state.markets || []).length || 2);
+      renderFoot();
+    }
+
+    /* ---------- footer: traded wallet + source repo ---------- */
+    function renderFoot() {
+      const links = state.links || {};
+      const address = links.wallet || "";
+      const explorer = links.explorer || "";
+      const walletLink = $("footWalletLink");
+      $("footWallet").hidden = !(address && explorer);
+      if (address && explorer) {
+        setText("footWalletAddr", address);
+        walletLink.href = explorer;
+        walletLink.title = `${address} · 在 Lighter 浏览器查看`;
+      } else {
+        walletLink.removeAttribute("href");
+        walletLink.removeAttribute("title");
+      }
+      const repo = links.repo || "";
+      const repoLink = $("footRepoLink");
+      if (repo) {
+        repoLink.href = repo;
+        setText("footRepoText", repo.replace(/^https?:\/\//, "").replace(/\/+$/, ""));
+      }
     }
 
     /* ---------- header status ---------- */
@@ -1090,6 +1143,7 @@
       Object.assign(state, {
         running: !!s.running, mode: s.mode || "paper", model: s.model || "mock",
         backend: s.backend || "", markets: s.markets || state.markets,
+        links: s.links || state.links,
         loop_seconds: s.loop_seconds ?? state.loop_seconds, min_confidence: s.min_confidence ?? 0.58,
         max_position_usd: s.max_position_usd ?? state.max_position_usd,
         trade_notional_usd: s.trade_notional_usd ?? state.trade_notional_usd,
@@ -1119,6 +1173,8 @@
           state.account = data; renderKpis(); renderBook(); renderScore(); break;
         case "status":
           state.running = !!data.running; renderStatus(); break;
+        case "links":
+          state.links = data; renderFoot(); break;
         case "decision": {
           state.decisions.push(data);
           if (state.decisions.length > KEEP_DECISIONS) state.decisions = state.decisions.slice(-KEEP_DECISIONS);
@@ -1183,7 +1239,7 @@
         connectedOnce = true;
       };
       es.onerror = () => setConn(false, "断开，重连中…");
-      ["snapshot", "ticker", "decision", "order", "fill", "account", "status", "error", "cycle"].forEach(name => {
+      ["snapshot", "ticker", "decision", "order", "fill", "account", "status", "links", "error", "cycle"].forEach(name => {
         es.addEventListener(name, (e) => { try { onEvent(name, JSON.parse(e.data)); } catch {} });
       });
     }

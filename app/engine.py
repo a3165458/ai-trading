@@ -75,6 +75,7 @@ class Engine:
         self.executor = executor
         self.account = account
         self.hub = hub
+        self.wallet_address = settings.lighter_l1_address
         self.running = False
         self._task: asyncio.Task | None = None
         self.tickers: dict[str, dict[str, Any]] = {}
@@ -182,9 +183,18 @@ class Engine:
             "decisions_per_min": (n / elapsed * 60) if elapsed > 1 else 0.0,
         }
 
+    def site_links(self) -> dict[str, Any]:
+        """Footer of the public dashboard: the traded wallet and the source repository."""
+        return {
+            "wallet": self.wallet_address,
+            "explorer": self.settings.wallet_url(self.wallet_address),
+            "repo": self.settings.repo_url,
+        }
+
     def snapshot_state(self) -> dict[str, Any]:
         return {
             "running": self.running,
+            "links": self.site_links(),
             "mode": self.settings.trading_mode,
             "model": self.model.name,
             "backend": self.settings.resolved_backend,
@@ -278,6 +288,10 @@ class Engine:
             return
         try:
             await self.market._ensure()
+            if not self.wallet_address:
+                self.wallet_address = await self.market.l1_address() or ""
+                if self.wallet_address:
+                    self.hub.emit("links", self.site_links())
             data = self.market.account_state()
             if not data:
                 return

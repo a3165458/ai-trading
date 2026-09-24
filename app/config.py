@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+DEFAULT_EXPLORER_URL = "https://app.lighter.xyz/explorer/accounts/{address}"
+DEFAULT_REPO_URL = "https://github.com/a3165458/ai-trading"
+_ADDRESS_RE = re.compile(r"0x[0-9a-fA-F]{40}")
 
 
 def _load_dotenv() -> None:
@@ -82,6 +87,10 @@ class Settings:
     max_adds: int = 2
     add_cooldown_seconds: float = 120.0
     add_min_pnl_bps: float = 0.0
+    # dashboard footer: public wallet address (blank = resolve from the exchange in live mode)
+    lighter_l1_address: str = ""
+    explorer_url: str = DEFAULT_EXPLORER_URL
+    repo_url: str = DEFAULT_REPO_URL
 
     @property
     def live(self) -> bool:
@@ -109,6 +118,13 @@ class Settings:
             return None
         return cap
 
+    def wallet_url(self, address: str | None = None) -> str:
+        """Explorer link for a public wallet address. Anything that is not an address yields nothing."""
+        addr = (self.lighter_l1_address if address is None else address) or ""
+        if not _ADDRESS_RE.fullmatch(addr):
+            return ""
+        return self.explorer_url.format(address=addr)
+
 
 def load_settings() -> Settings:
     _load_dotenv()
@@ -120,6 +136,15 @@ def load_settings() -> Settings:
         if m not in ("BTC", "ETH"):
             raise ValueError(f"unsupported market {m}; only BTC and ETH")
     acct = _s("LIGHTER_ACCOUNT_INDEX")
+    address = _s("LIGHTER_L1_ADDRESS")
+    if address and not _ADDRESS_RE.fullmatch(address):
+        raise ValueError("LIGHTER_L1_ADDRESS must be 0x plus 40 hex characters")
+    explorer = _s("EXPLORER_URL", DEFAULT_EXPLORER_URL)
+    if "{address}" not in explorer:
+        raise ValueError("EXPLORER_URL must contain {address}")
+    repo = _s("REPO_URL", DEFAULT_REPO_URL)
+    if not repo.startswith(("http://", "https://")):
+        raise ValueError("REPO_URL must be an http(s) URL")
     backend = _s("MODEL", "auto").lower()
     if backend not in ("auto", "thisthat", "jev", "mock"):
         raise ValueError("MODEL must be auto, thisthat, jev, or mock")
@@ -162,6 +187,9 @@ def load_settings() -> Settings:
         max_adds=max(0, _i("MAX_ADDS", 2)),
         add_cooldown_seconds=_f("ADD_COOLDOWN_SECONDS", 120.0),
         add_min_pnl_bps=_f("ADD_MIN_PNL_BPS", 0.0),
+        lighter_l1_address=address,
+        explorer_url=explorer,
+        repo_url=repo,
     )
     resolved = settings.resolved_backend
     if resolved == "thisthat" and not settings.openai_base_url:

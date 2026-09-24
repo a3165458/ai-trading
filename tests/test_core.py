@@ -68,6 +68,21 @@ def snap(mid=100.0, **kw) -> Snapshot:
     return Snapshot(**base)
 
 
+class ExplorerLinkTests(unittest.TestCase):
+    def test_valid_address_becomes_an_explorer_link(self):
+        address = "0x" + "a1" * 20
+        url = settings().wallet_url(address)
+        self.assertEqual(url, f"https://app.lighter.xyz/explorer/accounts/{address}")
+
+    def test_non_address_values_are_not_linked(self):
+        for bad in ("", "0x1234", "javascript:alert(1)", "0x" + "g" * 40, "0x" + "a" * 41):
+            self.assertEqual(settings().wallet_url(bad), "", bad)
+
+    def test_template_and_override_configurable(self):
+        s = settings(lighter_l1_address="0x" + "b2" * 20, explorer_url="https://scan.example/addr/{address}")
+        self.assertEqual(s.wallet_url(), f"https://scan.example/addr/0x{'b2' * 20}")
+
+
 class AccountingTests(unittest.TestCase):
     def test_round_trip_pnl(self):
         p = Position("BTC")

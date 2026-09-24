@@ -117,6 +117,8 @@ class LighterMarket:
         self._positions: dict[str, dict[str, Any]] = {}
         self._user_stats: dict[str, Any] = {}
         self._collateral: str | None = None
+        self._l1_address = ""
+        self._address_try = 0.0
         self._ready = asyncio.Event()
         self._stop = False
         self._task: asyncio.Task | None = None
@@ -309,6 +311,40 @@ class LighterMarket:
                 "positions": list(self._positions.values()),
             }]
         }
+
+    async def l1_address(self) -> str | None:
+        """Public wallet address of the configured account, for the explorer link.
+
+        The websocket channels carry positions and stats but not the address, so this
+        is a one-off REST lookup. Failures are retried at most once a minute.
+        """
+        if self.account_index is None:
+            return None
+        if self._l1_address:
+            return self._l1_address
+        now = time.time()
+        if now - self._address_try < 60:
+            return None
+        self._address_try = now
+        try:
+            if self._http is None:
+                import httpx
+                self._http = httpx.AsyncClient(timeout=8)
+            r = await self._http.get(
+                f"{self.base}/api/v1/account",
+                params={"by": "index", "value": self.account_index},
+                headers={"accept": "application/json"},
+            )
+            if r.status_code != 200:
+                return None
+            accounts = (r.json() or {}).get("accounts") or []
+            address = str((accounts[0] or {}).get("l1_address") or "").strip() if accounts else ""
+        except Exception:
+            return None
+        if address:
+            self._l1_address = address
+            return address
+        return None
 
     async def account(self, account_index: int) -> dict[str, Any]:
         await self._ensure()
